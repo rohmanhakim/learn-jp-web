@@ -1,0 +1,18 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# node
+node_modules/
+dist/
+
+# database (runtime state, never committed)
+*.db
+*.db-wal
+*.db-shm
+
+# tooling
+.DS_Store
+*.log
