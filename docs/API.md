@@ -1,6 +1,7 @@
 # API Contract
 
-JSON over HTTPS (HTTP on localhost in v1). All times UTC ISO-8601.
+JSON over HTTPS in every environment (plain HTTP on the local dev
+server). All times UTC ISO-8601.
 Version prefix: `/api`. Errors: `{"error": {"code": "...", "message": "..."}}`
 with appropriate HTTP status.
 

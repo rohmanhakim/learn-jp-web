@@ -16,3 +16,4 @@ dist/
 # tooling
 .DS_Store
 *.log
+.unipi/*

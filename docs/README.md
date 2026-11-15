@@ -7,9 +7,12 @@ fresh here.
 
 ## Product in one paragraph
 
-A self-hosted web app (installable PWA) that runs guided 10-minute
-Japanese practice sessions. The user opens the app, taps one button, and
-the system prompts a sequence of graded exercises (recall, reading,
+A single-user web app (installable PWA) that runs guided 10-minute
+Japanese practice sessions. It deploys as one Cloudflare Worker (static
+assets + API) behind Cloudflare Access, backed by one D1 database — see
+ARCHITECTURE.md and DECISIONS.md (D8, D11, D12). The user opens the app,
+taps one button, and the system prompts a sequence of graded exercises
+(recall, reading,
 writing). The system grades each response, stores performance, adapts the
 next session, and repeats. The user never plans, schedules, manages
 decks, or configures anything — every decision about *what to practice*
@@ -74,5 +77,15 @@ No application code exists yet. Implementation begins at Phase 0 of
   and tracking weakness (see LEARNING-DESIGN.md).
 - **Self-grade** — user's quick quality verdict (solid / shaky / wrong)
   on their own production answer.
-- **Seed content** — JSON files in `data/seed/` imported into SQLite at
-  setup time.
+- **Seed content** — JSON files in `data/seed/` imported into the D1
+  database at setup time.
+
+## History
+
+This repository revises the predecessor CLI project `~/Projects/learn-jp`
+(Python + Anki + OpenRouter, unmaintained). Its lessons are recorded in
+[DECISIONS.md](DECISIONS.md) (lineage note at the top) — most notably
+D2/D3/D5/D9 and, with [LEARNING-DESIGN.md](LEARNING-DESIGN.md) §8 and
+D13, the violation-based story-generation experiments it ran. These
+docs remain complete product context on their own; History exists so
+the rejected alternatives read as deliberate, not arbitrary.

@@ -4,6 +4,15 @@ Settled direction for the product. Changing any of these requires
 updating this file *and* the affected design docs in the same change.
 Format: decision → context → alternatives rejected → consequences.
 
+**Lineage:** this product revises the predecessor CLI project
+`~/Projects/learn-jp` (Python + Anki + OpenRouter, now unmaintained).
+Its lessons are the direct context behind D2 (Anki dropped), D3
+(start/end ceremony dropped), D5 (deterministic-heavy, LLM-minimal —
+its old "90/10" rule) and D9 (curated seed content); its
+`WORKFLOW-FINDINGS.md` and `VIOLATION_BASED_LEARNING.md` are the
+ancestors of LEARNING-DESIGN §8 (capture replaces auto-enrichment) and
+D13 (story generation, minus the deck-bloat flaw).
+
 ## D1. Installable web app (PWA), not console/desktop/native
 
 **Context:** practice must happen "whenever there is time" — phone and
@@ -54,10 +63,19 @@ recreate fragility; sessions must work offline.
 **Rejected:** runtime question generation; LLM grading in the request
 path.
 **Consequences:** ~90% of operations are deterministic code; LLM usage
-is confined to (a) seed-time content generation and (b) optional async
-writing evaluation behind a feature flag; grading of recall is
-normalization + keyword matching; production grading = deterministic
-checks + user self-grade until Phase 5.
+is confined to (a) seed-time content generation, (b) optional async
+writing evaluation behind a feature flag, and (c) async, ahead-of-time
+personalized story generation into a validated pool (D13); grading of
+recall is normalization + keyword matching; production grading =
+deterministic checks + user self-grade until Phase 5.
+
+**Amendment (LLM providers):** every call goes through one
+provider-neutral seam (`LLMClient`, Zod-validated outputs, model id
+from config). V1 ships **Workers AI only** — free tier, no keys, no
+billing. V2 adds an OpenRouter-compatible external provider,
+switchable via `user_config.llm_provider`, so free/cheap external
+models can be used on demand. Provider choice never affects the
+determinism or async-only guarantees above.
 
 ## D6. Offline-first with snapshot + queue sync
 
@@ -80,13 +98,24 @@ matches how the user reads/writes daily.
 handwriting is a possible later surface without changing the data
 model (a new prompt kind).
 
-## D8. Single-user, self-hosted, one container, one SQLite file
+## D8. Single-user, hosted on Cloudflare: one Worker, one D1 database
 
-**Context:** no team, no scale ambitions, privacy preferred.
-**Rejected:** hosted multi-user service; Postgres; accounts system.
-**Consequences:** zero-ops storage (WAL SQLite); access control is a
-deployment concern (localhost by default; reverse proxy/Tailscale if
-ever exposed); backup = file copy command.
+**Context:** no team, no scale ambitions, privacy preferred. Originally
+specified as a localhost-only container; revised with the platform
+move to Cloudflare (D12) while preserving the single-user, no-account
+design.
+**Rejected:** hosted multi-user service; Postgres; in-app accounts; a
+public URL without a gate (access stays a deployment concern, not app
+code).
+**Consequences:** storage = one D1 database (SQLite-compatible,
+managed, no WAL file); access control = Cloudflare Access in front of
+the Worker (One-time PIN to a single email; optional service tokens
+for scripts) — in-app auth remains a documented API non-goal; backup =
+scheduled `wrangler d1 export` plus always-on D1 Time Travel (7-day
+PITR on Free, 30-day on Paid), restore = `d1 execute --file` or
+`d1 time-travel restore`; local dev unchanged (`vite dev` + local D1);
+app bundle and data live on Cloudflare's edge — acceptable under D9
+(private repository, private use).
 
 ## D9. Seed content ships in the repository
 
@@ -106,4 +135,64 @@ and trustworthy; runtime generation contradicts D5/D6.
 **Rejected:** generating passages/questions per session.
 **Consequences:** a dev-time pipeline (generate → validate → curate →
 export) exists in Phase 3/4; bank growth is a batch activity between
-development sessions, not a runtime feature.
+development sessions, not a runtime feature. (Applies to the seed
+banks; the runtime story *pool* of D13 is governed separately — it
+pre-generates between sessions and never at serve time.)
+
+## D11. TypeScript end-to-end (backend included)
+
+**Context:** the client is already TypeScript; one language means
+shared API types (Hono `AppType` → `hono/client` compile-time-checked
+on both ends) and one toolchain (Vitest, `wrangler types`);
+Cloudflare Workers is a native TypeScript runtime.
+**Rejected:** Python/FastAPI — even on Python Workers (GA) it runs as
+CPython-via-Pyodide/WASM with package and cold-start constraints, and
+would split the codebase into two languages for no benefit.
+**Consequences:** backend logic (SM-2, grader, builder, adapter) is
+small deterministic TS; the one real risk is Japanese text
+normalization parity (JS `String.normalize('NFKC')` vs Python
+semantics) — guarded by a parity fixture table in Phase 1; the old
+Python tooling in the predecessor repo stays as provenance, only
+future pipeline scripts are written in TS.
+
+## D12. Full Cloudflare platform: one Worker (Hono) + D1 + Queues
+
+**Context:** one deployable, zero ops; edge latency helps the protected
+≤5 s tap-to-first-prompt metric; frontend and API ship together with
+`vite build` + `wrangler deploy`.
+**Rejected:** Docker container on laptop/VPS (the deployment target
+moved; remains a documented fallback only); Cloudflare Containers (no
+persistent disk — a SQLite file would not survive); Durable Object
+SQLite as the primary store in v1 (strong consistency is attractive,
+but there is no export-to-file API and no CLI migration story — kept
+as an escape hatch); D1 read replication (a single primary is ample
+for one user).
+**Consequences:** the Worker serves static assets (SPA mode) plus
+`/api/*`; Drizzle-generated SQL migrations via `wrangler d1
+migrations`; Queues isolate all async LLM work (retries + DLQ);
+Workers AI is the V1 provider (D5 amendment); **Workers Free covers
+single-user load** — the one limit to measure is CPU/request (10 ms on
+Free) in Phase 1, and Workers Paid ($5/mo) is an optional headroom
+upgrade rather than a requirement; content is deployed to
+Cloudflare's edge — fine under D9 (private repository, private use).
+
+## D13. Personalized stories are generated ahead of time into a validated pool
+
+**Context:** stories adapted to current mastery improve reading
+practice; the predecessor project already prototyped violation-based
+story generation and recorded its failure mode (deck bloat — its
+WORKFLOW-FINDINGS).
+**Rejected:** generating at session start (puts an LLM in the
+prompt-serving path — LEARNING-DESIGN §9 — and breaks offline D6);
+auto-adding story "violations" to the review queue (deck bloat; this
+is exactly what §8 unknown-word capture replaced).
+**Consequences:** generation runs on a queue after
+`session/complete` (plus a `scheduled()` top-up) from a mastery profile
+(known set + frontier targets + ≥85% level gate + genre rotation →
+`profile_hash`); every story passes the same deterministic validator
+as the seed pipeline before becoming `selectable`, with dedup on
+`profile_hash` and quarantine on repeated bad comprehension outcomes;
+the builder prefers a matching pool story and falls back to curated
+seed passages (D10 / D3); queue or provider failure leaves behavior
+byte-identical to Phase 3; words encountered in stories enter the SRS
+only through §8 capture.

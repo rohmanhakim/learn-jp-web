@@ -1,11 +1,23 @@
 # Data Model
 
-Single SQLite database (WAL mode). Two families of tables:
+One Cloudflare D1 database (SQLite-compatible, managed — see
+ARCHITECTURE.md). Two families of tables:
 
 - **Content tables** — populated once from seed JSON at setup,
-  immutable at runtime.
+  immutable at runtime (plus validated *generated* stories, D13).
 - **Runtime tables** — accumulate user activity; the source of truth
   for SRS state, history, and adaptation.
+
+D1 facts that shape this schema (there is no DB file to manage):
+
+- Storage is managed — never issue `PRAGMA` statements (no WAL).
+- Hard limits: **100 bound parameters per statement** (the seed
+  importer therefore emits literal-value SQL), 100 KB per statement,
+  2 MB per row, 100 columns per table, 1,000 queries per Worker
+  invocation (Paid; a `batch()` call counts as one).
+- Schema changes ship as versioned SQL migrations applied with
+  `wrangler d1 migrations apply` (generated from Drizzle); a backup is
+  captured before each apply.
 
 ## Seed data (files in `data/seed/`)
 
@@ -67,7 +79,9 @@ Readings comma-separated; `on` = On'yomi, `kun` = Kun'yomi.
 ## Schema
 
 DDL below is the design target; exact types may be adjusted during
-implementation, semantics must not.
+implementation, semantics must not. The DDL targets D1/SQLite
+semantics as-is; the only adjustments allowed are the mechanical ones
+D1 implies (no `PRAGMA`/WAL statements).
 
 ```sql
 -- ─── content tables (seeded, immutable) ─────────────────────────
@@ -97,7 +111,7 @@ CREATE TABLE kanji (
     created_at  TEXT DEFAULT (datetime('now'))
 );
 
-CREATE TABLE passages (                     -- reading bank (seed)
+CREATE TABLE passages (                     -- reading bank: seed + pool
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     key         TEXT UNIQUE NOT NULL,
     level       TEXT NOT NULL,
@@ -105,8 +119,14 @@ CREATE TABLE passages (                     -- reading bank (seed)
     body        TEXT NOT NULL,
     created_by  TEXT DEFAULT ('seed'),      -- 'seed' | 'llm:<model>'
     curated     INTEGER DEFAULT 0,
+    status      TEXT DEFAULT 'selectable',  -- 'selectable'|'quarantined'|'rejected'
+    profile_hash TEXT,                      -- gen-profile dedup key for pool stories (D13)
+    generated_at TEXT,                      -- NULL for seed rows
     created_at  TEXT DEFAULT (datetime('now'))
 );
+-- pool dedup (D13):
+-- CREATE UNIQUE INDEX uq_passages_profile ON passages(profile_hash)
+--   WHERE profile_hash IS NOT NULL;
 
 CREATE TABLE passage_questions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -184,12 +204,28 @@ CREATE TABLE unknown_words (                -- captured while reading
     created_at    TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE writing_evaluations (          -- Phase 5, async LLM eval
+    response_uuid TEXT PRIMARY KEY REFERENCES responses(client_uuid),
+    verdict       TEXT NOT NULL,            -- 'solid'|'shaky'|'wrong'
+    feedback      TEXT NOT NULL,            -- JSON: structured notes (Done screen)
+    model         TEXT NOT NULL,            -- provider:model provenance
+    status        TEXT NOT NULL DEFAULT 'ok',  -- 'ok'|'unparseable'|'failed'
+    created_at    TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE user_config (
     key        TEXT PRIMARY KEY,
     value      TEXT,
     updated_at TEXT DEFAULT (datetime('now'))
 );
 ```
+
+Known `user_config` keys: `schema_version`, `seed_hash` (import
+tracking), `llm_eval_enabled` ('0'/'1' — Phase 5 flag),
+`story_pool_enabled` ('0'/'1' — Phase 5.5 flag), `llm_provider`
+('workers_ai' default; 'openrouter' from V2), `llm_model` (model id).
+These are deployer-set internal flags — there is deliberately no
+user-facing settings screen (LEARNING-DESIGN §9).
 
 ## Item keying (SRS identity)
 
@@ -236,14 +272,25 @@ materialized summary only if queries get slow).
   audits stay possible even if seed content changes later.
 - No deletion of runtime rows; abandoned sessions keep
   `completed_at = NULL` and still count partial responses.
-- Database backups = file copy (WAL checkpoint before copy, or
-  `VACUUM INTO`).
+- Database backups = scheduled `wrangler d1 export --remote --output
+  backups/<date>.sql` (restore with `wrangler d1 execute --file`),
+  plus always-on D1 **Time Travel** point-in-time restore (7 days on
+  Workers Free, 30 days on Paid).
 
-## Import procedure (setup time)
+## Migrations & import procedure (setup time)
 
-1. Create schema (above).
-2. Load `data/seed/vocabulary.json`, `kanji.json` (idempotent upsert on
-   `item_id`).
-3. When they exist: `passages.json`, `writing_prompts.json`.
+1. Schema is defined in Drizzle; generated SQL migrations apply with
+   `wrangler d1 migrations apply` (both `--local` and `--remote`),
+   tracked in the `d1_migrations` table.
+2. Seed load: a dev-time script (Node/TS) reads `data/seed/*.json` and
+   emits an idempotent SQL file — literal-value `INSERT … ON CONFLICT
+   (item_id) DO UPDATE` statements (literal values avoid D1's
+   100-bound-parameter cap) — applied with
+   `wrangler d1 execute <db> --file seed.sql` against local and remote.
+3. When they exist: `passages.json`, `writing_prompts.json` are emitted
+   into the same seed file. *Generated pool stories never enter through
+   seed files* — they arrive only via the Phase 5.5 queue consumer
+   after validation (D13).
 4. Record `schema_version` and `seed_hash` in `user_config` so re-import
-   after content updates is detectable.
+   after content updates is detectable. Verify counts: 8,334
+   vocabulary / 2,091 kanji.

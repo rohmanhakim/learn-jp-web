@@ -20,18 +20,28 @@ manual setup.**
 
 Setup only; no user-facing behavior.
 
-- [ ] Project scaffold: FastAPI app skeleton, Svelte+Vite app, shared
-      `Makefile`/scripts (`dev`, `test`, `seed`, `build`, `docker`)
-- [ ] SQLite schema per DATA-MODEL.md + `schema_version`/`seed_hash` in
-      `user_config`
-- [ ] Seed importer: `data/seed/vocabulary.json` + `kanji.json`
-      (idempotent upsert, verify counts 8,334 / 2,091)
-- [ ] Import unit tests (counts, uniqueness of item_id, level tags valid)
-- [ ] `docker build` produces an image serving API + static frontend
-- [ ] CI or pre-commit: lint + tests (pick one, keep minimal)
+- [ ] Project scaffold: Svelte+Vite PWA + Cloudflare Worker (Hono) in
+      one repo with `@cloudflare/vite-plugin`, shared scripts
+      (`dev`, `test`, `seed`, `build`, `deploy`)
+- [ ] Schema via Drizzle per DATA-MODEL.md + `schema_version`/
+      `seed_hash` in `user_config`; migrations applied with
+      `wrangler d1 migrations apply` (local + remote)
+- [ ] Seed importer: `data/seed/vocabulary.json` + `kanji.json` →
+      idempotent literal-value `seed.sql`, applied with
+      `wrangler d1 execute --file` (verify counts 8,334 / 2,091)
+- [ ] Import unit tests (counts, uniqueness of item_id, level tags
+      valid) in Vitest via `@cloudflare/vitest-plugin` (runs in workerd)
+- [ ] `vite build` + `wrangler deploy` serves an (empty) page;
+      `wrangler types` generates `Env` and is wired into `tsc`
+- [ ] One-time manual: Cloudflare account/zone + D1 database + Access
+      application on the hostname (One-time PIN, single email) before
+      the first deploy — the app is never reachable without a gate (D8)
+- [ ] CI or pre-commit: lint + `wrangler types --check` + tests (pick
+      one, keep minimal)
 
-**Acceptance:** `make seed && make dev` yields a running server with
-seeded DB; `docker run` serves an (empty) page.
+**Acceptance:** `npm run seed && npm run dev` yields a running dev
+server (workerd + local D1) with seeded DB; `npm run deploy` serves an
+(empty) page behind Access.
 
 ## Phase 1 — The core loop (MVP)
 
@@ -40,20 +50,25 @@ Recall prompts only — the loop itself must exist before content depth.
 - [ ] SM-2 kernel (`srs` module) with unit tests for every grade path
       (first rep, second rep, mature, lapse, ease floor)
 - [ ] Grading rules: `keyword`, `normalized exact` (+ NFKC, kana
-      normalization) with normalization unit tests
+      normalization) with normalization unit tests; parity fixture
+      table with hardcoded expected outputs (guards the one TS
+      portability risk flagged in D11)
 - [ ] Session builder v1: due reviews + 3 new items (no content piece
       yet) + `adaptation_note`
 - [ ] Endpoints: `POST /api/session/start`, `POST /api/responses`
       (batch, UUID-idempotent), `POST /api/session/complete`,
       `GET /api/status`
+- [ ] Shared API contract: export Hono `AppType`; the PWA consumes it
+      via `hono/client` (`hc<AppType>`) so request/response types are
+      compile-time checked on both ends
 - [ ] Frontend: Home / Session / Done per UX.md (recall + production
       with self-grade)
 - [ ] First-run fast-skip ("I know this") flow
 - [ ] Sessions + responses persisted; streak computed from `sessions`
 - [ ] Done screen shows `next_session.preview` derived from real data
 
-**Acceptance:** complete the product-level definition of done on
-localhost, desktop browser. No external services, no third-party
+**Acceptance:** complete the product-level definition of done against
+the local dev server, desktop browser. No external services, no third-party
       integrations, no LLM.
 
 ## Phase 2 — Offline-first (PWA)
@@ -64,6 +79,9 @@ localhost, desktop browser. No external services, no third-party
       resume after kill, exit-mid-session partial save)
 - [ ] Sync flush on reconnect with partial-success handling
       (`duplicate: true`), server UNIQUE constraints tested
+- [ ] Service worker coexists with the Cloudflare Access session
+      redirect: first visit authenticates via Access, the app still
+      boots offline from precache afterwards
 - [ ] Lighthouse PWA checks: installable, offline-capable, score ≥ 90
 
 **Acceptance:** airplane-mode session on a phone completes end-to-end
@@ -72,8 +90,10 @@ double-counts nothing.
 
 ## Phase 3 — Reading
 
-- [ ] Content pipeline tooling (dev-time): batch generate → validate →
-      human-curate → export `data/seed/passages.json`
+- [ ] Content pipeline tooling (dev-time, Node/TS): batch generate →
+      validate → human-curate → export `data/seed/passages.json`;
+      calls go through the provider-neutral `LLMClient` seam (V1:
+      Workers AI REST endpoint)
 - [ ] Initial bank: ~30 passages with 1–3 questions each (levels
       n5–n4 first; grow later)
 - [ ] Importer + schema for `passages` / `passage_questions`
@@ -108,29 +128,71 @@ and feed bucket accuracy.
       (this likely exists earlier — formalize now)
 - [ ] Bucket-driven new-item kind selection + weakening/rot-floor rules
       (LEARNING-DESIGN §5) behind config flags
-- [ ] Async LLM evaluator for free-form writing: queued after
-      `session/complete`, stores quality flag; **never** blocks or
-      mutates session records; fully optional (feature-flagged, works
-      when disabled)
+- [ ] `LLMClient` seam (provider-neutral, Zod-validated outputs) with
+      the V1 Workers AI implementation; model id from config, never
+      from call sites
+- [ ] Async LLM evaluator for free-form writing: queue producer after
+      `session/complete`, queue consumer writes `writing_evaluations`
+      (idempotent on `response_uuid`, retries + dead-letter queue);
+      **never** blocks or mutates session records; fully optional
+      (feature-flagged, works when disabled)
 - [ ] `adaptation_note` text derived from real signals
 
 **Acceptance:** two consecutive weeks of sessions show composition
 shifting toward measured weaknesses; app remains fully functional with
 the LLM feature off.
 
+## Phase 5.5 — Personalized story pool (D13)
+
+Requires Phase 3 (passages machinery + validator) and Phase 5 (LLM
+seam). Grows the pool *between* sessions — never at serve time.
+
+- [ ] Mastery profile builder: known set (mature SRS items) + frontier
+      targets (weakest bucket) + level via the ≥85% gate + genre
+      rotation → `profile_hash`
+- [ ] `story-gen` queue producer at `session/complete` (when the pool
+      lacks a usable story) plus a `scheduled()` top-up; consumer calls
+      `LLMClient` with a strict JSON schema
+- [ ] Shared deterministic validator (same checks as the seed
+      pipeline): vocab constraint, known-word ratio band,
+      `answer_index` in range → `status`
+      selectable/quarantined/rejected; `profile_hash` dedup
+- [ ] Builder prefers a `selectable` story matching the current
+      profile; falls back to the curated seed passage (never a dead
+      end, D3)
+- [ ] Feedback demotion: repeated bad comprehension outcomes
+      quarantine a story (no UI — pure signal)
+- [ ] Tests: validator fixtures, double-delivery idempotency, and
+      "feature off / queue down ⇒ byte-identical to Phase 3" behavior
+
+**Acceptance:** with the flag on, the session after a profile change
+serves a validated story generated for the current mastery profile;
+with it off or the provider down, sessions behave exactly as Phase 3.
+
 ## Phase 6 — Polish & deployment
 
 - [ ] Mobile pass: typography, tap targets, IME quirks (composition
       events must not submit mid-IME)
 - [ ] Light/dark, `aria-live` verdicts, keyboard shortcuts
-- [ ] Docker deployment scripts for laptop (default) + optional
-      server/VPS instructions (reverse-proxy notes, backup =
-      `VACUUM INTO`)
-- [ ] Backup/restore command for the SQLite file
-- [ ] README for humans (install, run, back up)
+- [ ] Verify the Access gate end-to-end on phone + laptop (One-time
+      PIN login, PWA install through it, offline boot after login)
+- [ ] Backup/restore: scheduled `wrangler d1 export --remote --output
+      backups/<date>.sql` (laptop cron or CI) + documented restore
+      procedure (`d1 execute --file` / `d1 time-travel restore`)
+- [ ] README for humans (install, run, back up, plan-tier notes)
 
 **Acceptance:** daily use on phone + laptop for two weeks with zero
 manual interventions.
+
+## Later (V2, non-blocking)
+
+- [ ] OpenRouter `LLMClient` implementation +
+      `user_config.llm_provider` switch (choose provider on demand;
+      V1 ships Workers AI only)
+- [ ] Evaluate Workers Paid only when a measured limit bites
+      (CPU/request on Free, D1 queries per invocation, 30-day Time
+      Travel)
+- [ ] Optional Anki export (D2's never-blocking nice-to-have)
 
 ---
 
@@ -141,7 +203,9 @@ existence — content can be thin at first (seed vocab covers months of
 new items). Phase 2 before reading/writing because offline tolerance is
 a stated requirement and retrofitting it later is the expensive path.
 Reading before writing because capture-into-queue compounds the
-vocabulary loop.
+vocabulary loop. Phase 5.5 after 5 because it reuses the LLM seam and
+the validation tooling that Phases 3/5 establish — the story pool is
+content machinery plus a queue, nothing new in the session path.
 
 ## Out of scope (do not add during these phases)
 

@@ -61,7 +61,7 @@ never a ceremony).
 
      Type the meaning
   ┌──────────────────────────────┐
-  │ every morning            ⏎  │
+  │ every morning            ⏎   │
   └──────────────────────────────┘
 ```
 After submit (online): inline verdict for ~1.2 s, then next prompt.
@@ -72,7 +72,7 @@ After submit (online): inline verdict for ~1.2 s, then next prompt.
 
   Write a sentence using 合図 (signal)
   ┌──────────────────────────────┐
-  │ 彼は合図をくれました。        │
+  │ 彼は合図をくれました。           │
   └──────────────────────────────┘
      Was that solid?
   [ ✓ solid ] [ ~ shaky ] [ ✗ wrong ]
@@ -86,8 +86,8 @@ pre-condition. Deterministic checks (must-contain etc.) show inline as
         reading · N4
 
   ┌─ 公園の静かな日 ──────────────┐
-  │  公園には人が少ない…          │  ← passage stays on top,
-  └──────────────────────────────┘     question below
+  │  公園には人が少ない…           │  ← passage stays on top,
+  └─────────────────────────────┘     question below
         公園の様子として正しいものは？
   ( ) 子供たちが遊んでいる
   ( ) 静かで、読書をしている人がいる   ← tap to answer

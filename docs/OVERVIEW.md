@@ -79,8 +79,10 @@ repetition, per-skill performance tracking, session adaptation, offline
 practice with sync, seed content import, streak/summary.
 
 **Later / conditional:** LLM grading of free-form writing (async,
-non-blocking), harvested real-world reading material, handwriting
-surface, native wrapper, export to external flashcard tools.
+on-blocking), personalized story generation (async, ahead-of-time
+pool — DECISIONS D13), harvested real-world reading material,
+handwriting surface, native wrapper, export to external flashcard
+tools.
 
 **Never:** deck/schedule configuration UI, listening exam drills,
 multi-tenant accounts.

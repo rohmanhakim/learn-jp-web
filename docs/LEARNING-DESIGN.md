@@ -82,7 +82,9 @@ Target duration 10–15 min. Composition, in order:
                  meanings — follows the weakest bucket)
 3. content      exactly ONE of: a reading passage (+1–3 questions)
                  OR a writing prompt (or none, if neither bank exists yet)
-                 reading: passage chosen from highest level whose
+                 reading: prefer a generated story whose profile matches
+                 the current mastery (status='selectable', D13);
+                 otherwise a seed passage chosen from highest level whose
                  expected known-word ratio ≥ 85% (estimate from
                  vocabulary table against passage text)
                  writing: from the weakest *productive* bucket's level
@@ -120,8 +122,10 @@ User never configures any of this. It is visible only through
 
 ## 6. Content pipeline (seed time, offline)
 
-Purpose: grow the passage and writing banks. Runs as dev-time tooling,
-**never during a session**.
+Purpose: grow the passage and writing banks. Seed-time generation runs
+as dev-time tooling; nothing LLM-related ever runs **during a session**
+— the runtime personalization pool (below, DECISIONS D13) generates
+*between* sessions and feeds this same validator.
 
 1. **Generate** — batch LLM call producing N passages/prompts per level
    against a strict JSON schema (level, vocab constraint list drawn
@@ -133,8 +137,33 @@ Purpose: grow the passage and writing banks. Runs as dev-time tooling,
 4. **Export** — `data/seed/passages.json`, `writing_prompts.json`;
    imported via the DATA-MODEL import procedure.
 
-Budget: LLM spend happens here (generation) and optionally at Phase 5
-(async writing evaluation). Runtime cost of a session = zero tokens.
+Budget: LLM spend happens here (generation), and optionally in Phase 5
+(async writing evaluation) and Phase 5.5 (personalization pool). V1
+runs these on the Workers AI free tier (D5 amendment). Cost of
+serving a session = zero tokens — every prompt is a stored row.
+
+### Personalization pool (runtime variant, Phase 5.5 / D13)
+
+Stories adapted to current mastery are maintained **between**
+sessions, never at serve time:
+
+1. **Profile** — after `session/complete`: known set (mature SRS items
+   = allowed vocabulary), frontier targets (weakest bucket), level via
+   the ≥85% gate, genre rotation → `profile_hash`.
+2. **Generate** — if the pool holds no usable story for the profile,
+   enqueue on the `story-gen` queue (plus a `scheduled()` top-up). The
+   consumer calls the provider-neutral `LLMClient` with a strict JSON
+   schema (title, body, target words, questions with answer keys).
+3. **Validate** — the deterministic checks of step 2 above (vocab
+   constraint, ratio band, `answer_index` in range) plus idempotency
+   on `profile_hash`; failures retry then store `rejected`.
+4. **Serve** — the builder treats a `selectable` story exactly like a
+   seed passage (§4 rule 3). Pool empty or provider down ⇒ seed-bank
+   fallback; sessions are unaffected either way.
+
+Stories do **not** enrich the review queue: unknown words they contain
+enter the SRS only through §8 capture — the lesson from the
+predecessor project's violation-based enrichment (deck bloat).
 
 ## 7. Onboarding (first run)
 
@@ -167,6 +196,7 @@ These are part of the design; adding them back breaks the product:
   by completing or explicit exit.
 - No deck/schedule/config UI in the study path.
 - No network requirement to practice (once a snapshot exists).
-- No LLM in the prompt-serving path.
+- No LLM in the prompt-serving path (stories are pre-generated into a
+  validated pool between sessions — D13 — never generated on demand).
 - No multiple-choice for recall prompts (typing is the practice).
 - No dashboard the user must read to decide anything.
