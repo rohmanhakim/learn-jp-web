@@ -1,0 +1,14 @@
+name = "learn-jp-web"
+main = "src/worker/index.ts"
+compatibility_date = "2026-11-16"
+compatibility_flags = ["nodejs_compat"]
+upload_source_maps = true
+
+# Static assets (SPA shell) are configured by @cloudflare/vite-plugin at
+# build/deploy time — do not add an [assets] section here.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "learn-jp"
+database_id = "4dd15cb4-a9b9-4858-b668-0a019a4a9ee3"
+migrations_dir = "drizzle/migrations"

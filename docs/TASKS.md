@@ -20,23 +20,23 @@ manual setup.**
 
 Setup only; no user-facing behavior.
 
-- [ ] Project scaffold: Svelte+Vite PWA + Cloudflare Worker (Hono) in
+- [x] Project scaffold: Svelte+Vite PWA + Cloudflare Worker (Hono) in
       one repo with `@cloudflare/vite-plugin`, shared scripts
       (`dev`, `test`, `seed`, `build`, `deploy`)
-- [ ] Schema via Drizzle per DATA-MODEL.md + `schema_version`/
+- [x] Schema via Drizzle per DATA-MODEL.md + `schema_version`/
       `seed_hash` in `user_config`; migrations applied with
       `wrangler d1 migrations apply` (local + remote)
-- [ ] Seed importer: `data/seed/vocabulary.json` + `kanji.json` →
+- [x] Seed importer: `data/seed/vocabulary.json` + `kanji.json` →
       idempotent literal-value `seed.sql`, applied with
       `wrangler d1 execute --file` (verify counts 8,334 / 2,091)
-- [ ] Import unit tests (counts, uniqueness of item_id, level tags
+- [x] Import unit tests (counts, uniqueness of item_id, level tags
       valid) in Vitest via `@cloudflare/vitest-plugin` (runs in workerd)
-- [ ] `vite build` + `wrangler deploy` serves an (empty) page;
+- [x] `vite build` + `wrangler deploy` serves an (empty) page;
       `wrangler types` generates `Env` and is wired into `tsc`
-- [ ] One-time manual: Cloudflare account/zone + D1 database + Access
+- [x] One-time manual: Cloudflare account/zone + D1 database + Access
       application on the hostname (One-time PIN, single email) before
       the first deploy — the app is never reachable without a gate (D8)
-- [ ] CI or pre-commit: lint + `wrangler types --check` + tests (pick
+- [x] CI or pre-commit: lint + `wrangler types --check` + tests (pick
       one, keep minimal)
 
 **Acceptance:** `npm run seed && npm run dev` yields a running dev

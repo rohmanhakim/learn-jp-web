@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Minimal gate per docs/TASKS.md Phase 0: lint + `wrangler types --check`
+# + tests (+ build per docs/ARCHITECTURE.md "CI" row).
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install
+      - run: npm ci
+      - run: npm run lint
+      - run: npx wrangler types --check
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build

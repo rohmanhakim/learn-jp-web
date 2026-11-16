@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "moduleDetection": "force",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["vite/client", "@cloudflare/vitest-plugin/types"]
+  },
+  "include": [
+    "src",
+    "tests",
+    "scripts",
+    "drizzle",
+    "*.config.ts",
+    "worker-configuration.d.ts"
+  ]
+}
