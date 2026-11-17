@@ -296,17 +296,17 @@ committed — npm run check green: 17 new tests in tests/prompts.test.ts,
 
 ### P1.6 Session builder v1 — `src/worker/session-builder.ts`
 
-- [ ] Reviews: `srs_state` where `due_at ≤ now AND suspended = 0`,
+- [x] Reviews: `srs_state` where `due_at ≤ now AND suspended = 0`,
       cap 25, oldest-due first (overflow rolls to next session).
-- [ ] New items: 3 drawn from the **weakest bucket** by 7-day
+- [x] New items: 3 drawn from the **weakest bucket** by 7-day
       rolling accuracy (buckets with no data = neutral, not
       weakest); kind mix follows the bucket (e.g. `kanji` →
       `kanji_reading` prompts, `writing` → production).
-- [ ] Level heuristic: lowest level where new items remain.
-- [ ] No content piece (LEARNING-DESIGN §4 rule 3 skipped in v1).
-- [ ] `adaptation_note`: one human sentence — what was focused on
+- [x] Level heuristic: lowest level where new items remain.
+- [x] No content piece (LEARNING-DESIGN §4 rule 3 skipped in v1).
+- [x] `adaptation_note`: one human sentence — what was focused on
       and why (API.md example style).
-- [ ] Emits the snapshot JSON for the `sessions.snapshot` column,
+- [x] Emits the snapshot JSON for the `sessions.snapshot` column,
       including `fast_skip_available: true` when the `sessions`
       table is empty (drives P1.15).
 
@@ -324,7 +324,44 @@ tests/seed.test.ts conventions):
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-17 · decided: (1) API surface: `buildSession(db, now: Date)`
+plus exported `dueCount`, `bucketAccuracies`/`weakestBucket`, `streakDays` so
+P1.8 reuses one implementation (Notes requirement above); raw `D1Database`
+SQL per repo precedent (no runtime Drizzle query-builder yet), `now` injected
+for deterministic tests; (2) snapshot = `{ prompts, passages: [],
+adaptation_note, fast_skip_available }` — API.md `session/start` minus the
+transport fields P1.9 adds, `passages` always [] in v1 (D-2);
+(3) accuracy = `grade='correct'` numerator over all graded responses in a
+7-day window (`shaky` counts in the denominator only), the window bound is
+formatted as SQLite `datetime('now')` to match `created_at`'s column default;
+ties break on `BUCKETS` declaration order; D-1's `AND kind_hint IS NULL`
+filter is deferred to P1.10 (column does not exist yet) and flagged in a
+header comment; (4) bucket kind mix: `kanji` → 3× `kanji_reading`, `writing`
+→ 3× vocab `production`, `vocab_recog` → recall alternating
+meaning→reading→meaning by slot (an exhausted direction retries the other
+before leaving the bucket), `reading` → never actionable in v1 → fallback
+order `vocab_recog → kanji → writing`; (5) level heuristic = first level in
+`LEVELS` (n5→n1) with unseen items, per draw; unseen = no `srs_state` row
+for that direction's `item_key` (correlated `NOT EXISTS` over
+`'vocab:' || item_id || ':' || direction`); within-session draws are
+distinct (vocab surfaces and kanji characters both excluded); (6)
+`adaptation_note` always describes the bucket actually drawn, four
+templates: weakest==drawn → API.md's exact `New items focus: kanji readings
+(weakest 7d: 60%)` shape, plus no-history, reading-needs-passages and
+exhausted-bank variants; (7) never-zero (D3): when every bank item is
+seen+suspended a safety net draws with SRS ignored — tested via 4
+`INSERT … SELECT` statements covering all directions; an unseeded DB stays
+a Phase-0 invariant, not handled here; (8) `dueCount` is uncapped (the §4
+cap is a composition rule, not a change in what is due); `streakDays` counts
+UTC calendar days (D-3) back from today, yesterday still counts, 0 when the
+latest session predates yesterday; (9) bug found by the tests: `drawBucket`'s
+initial loop `i < NEW_ITEM_COUNT - prompts.length` compared an absolute index
+against remaining capacity, stopping every call after 2 draws and yielding
+4-item sessions — fixed to a `while (local < count)` capacity loop;
+(10) tests: tests/session-builder.test.ts, 10 tests in workerd against
+seeded D1 per seed.test.ts conventions, each test resets runtime tables
+first so it passes under both per-test and per-file storage isolation ·
+commits: (not committed — npm run check green: 174 total))
 ```
 
 ---

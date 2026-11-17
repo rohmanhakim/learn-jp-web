@@ -53,7 +53,7 @@ Recall prompts only — the loop itself must exist before content depth.
       normalization) with normalization unit tests; parity fixture
       table with hardcoded expected outputs (guards the one TS
       portability risk flagged in D11)
-- [ ] Session builder v1: due reviews + 3 new items (no content piece
+- [x] Session builder v1: due reviews + 3 new items (no content piece
       yet) + `adaptation_note`
 - [ ] Endpoints: `POST /api/session/start`, `POST /api/responses`
       (batch, UUID-idempotent), `POST /api/session/complete`,
