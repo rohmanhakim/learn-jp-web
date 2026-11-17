@@ -47,7 +47,7 @@ server (workerd + local D1) with seeded DB; `npm run deploy` serves an
 
 Recall prompts only — the loop itself must exist before content depth.
 
-- [ ] SM-2 kernel (`srs` module) with unit tests for every grade path
+- [x] SM-2 kernel (`srs` module) with unit tests for every grade path
       (first rep, second rep, mature, lapse, ease floor)
 - [ ] Grading rules: `keyword`, `normalized exact` (+ NFKC, kana
       normalization) with normalization unit tests; parity fixture

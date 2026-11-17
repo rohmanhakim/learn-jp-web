@@ -14,6 +14,7 @@ Per `srs_state` row:
 on graded response g ∈ {correct, shaky, incorrect}:
 
   incorrect  → lapses += 1
+               reps = 0           (lapse re-enters the ladder — see below)
                interval_days = 0  (re-queued today's queue)
                ease = max(1.3, ease - 0.20)
   shaky      → interval_days = max(1, interval_days * 1.2)
@@ -32,6 +33,10 @@ on graded response g ∈ {correct, shaky, incorrect}:
   self-grade `~ shaky` on production prompts, and from keyword matches
   that only partially hit.
 - New items start `interval_days = 0, due_at = now`.
+- A lapse resets `reps` to 0 (Phase-001.md decision D-6), so the next
+  `correct` re-enters the 1-day step and the ladder grows again —
+  otherwise a lapsed item would compute `round(0 × ease) = 0` and
+  stay due forever, while `shaky` recovered via `max(1, 0 × 1.2)`.
 - **Fast-skip (first-run onboarding):** every recall prompt in the very
   first session offers an "I know this" action → row created with
   `suspended = 1, due_at = now + 30d`. This replaces a placement test:

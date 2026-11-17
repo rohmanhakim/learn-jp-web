@@ -84,7 +84,7 @@ tests/keys.test.ts, 54 total) )
 
 ### P1.2 SM-2 kernel — `src/worker/srs.ts`
 
-- [ ] Pure function `applyGrade(state, grade, now) → next state`
+- [x] Pure function `applyGrade(state, grade, now) → next state`
       implementing LEARNING-DESIGN §1 verbatim — no DB access, no
       hidden inputs (time is a parameter).
 
@@ -104,7 +104,24 @@ TASKS.md:
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-17 · decided: (1) D-6 — `incorrect` resets `reps`
+to 0 (ladder re-entry); LEARNING-DESIGN §1 amended in the same
+change: without the reset a lapsed item computes `round(0 × ease) =
+0` and stays due forever, while `shaky` recovered via `max(1, 0 ×
+1.2)` — the gap was in the pseudocode, not intent; (2) state =
+scheduling columns only (ease/intervalDays/dueAt/reps/lapses/
+lastGrade) — item_key/kind/suspended stay with the caller, so the
+result spreads straight into a Drizzle row update (P1.10);
+`lastGrade` set on every path (column exists, §1 silent); `now:
+Date` in, `dueAt` out as UTC ISO-8601 — always set explicitly,
+never via the column's `datetime('now')` default, so lexicographic
+`due_at <= ?` comparisons see one format; (3) due timestamps use
+`Math.round(interval × 864e5)` ms — sub-ms float dust after shaky's
+×1.2 must not leak into stored ISO text; (4) shaky never bumps
+`reps` (§1 gives reps only to `correct`); fractional intervals are
+REAL and feed the mature formula (3.6 × 2.5 → 9) · commits: (not
+committed — npm run check green: 16 new tests in tests/srs.test.ts,
+70 total) )
 ```
 
 ### P1.3 Text normalization + parity fixtures — `src/worker/normalize.ts`
@@ -454,6 +471,17 @@ updating this file together with the affected design docs, per
 - **D-5 · unknown-word capture.** The `kind_hint: "unknown_word"`
   branch is reserved in the contract but implemented in Phase 3 —
   there are no passages to capture words from in Phase 1.
+- **D-6 · a lapse resets `reps` (P1.2).** `incorrect` sets
+  `reps = 0` so the next `correct` re-enters the 1-day step and the
+  item re-walks the 1 → 3 → mature ladder (Anki-style re-entry).
+  Needed because §1's `round(previous × ease)` with
+  `previous = 0` never recovers — a lapsed mature item would stay due
+  forever, while `shaky` recovered via `max(1, 0 × 1.2)`; the gap
+  was in the pseudocode. LEARNING-DESIGN §1 amended in the same
+  change. *Rejected:* keeping lifetime `reps` and special-casing
+  `interval = 0 → 1` on `correct` (recovery hidden in a branch;
+  `reps` would mean "lifetime completions", which nothing reads);
+  strict verbatim §1 (items frozen at interval 0).
 
 ## Notes
 
