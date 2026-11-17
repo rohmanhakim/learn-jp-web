@@ -19,7 +19,7 @@ export const vocabulary = sqliteTable(
     source: text("source"),
     createdAt: text("created_at").default(sql`(datetime('now'))`),
   },
-  (t) => ({ levelIdx: index("idx_vocab_level").on(t.level) }),
+  (t) => [index("idx_vocab_level").on(t.level)],
 );
 
 export const kanji = sqliteTable("kanji", {
@@ -49,12 +49,12 @@ export const passages = sqliteTable(
     generatedAt: text("generated_at"),
     createdAt: text("created_at").default(sql`(datetime('now'))`),
   },
-  (t) => ({
+  (t) => [
     // D13 pool dedup: one generated story per mastery profile.
-    uqPassagesProfile: uniqueIndex("uq_passages_profile")
+    uniqueIndex("uq_passages_profile")
       .on(t.profileHash)
       .where(sql`${t.profileHash} IS NOT NULL`),
-  }),
+  ],
 );
 
 export const passageQuestions = sqliteTable("passage_questions", {
@@ -98,7 +98,7 @@ export const srsState = sqliteTable(
     lastGrade: text("last_grade"),
     updatedAt: text("updated_at").default(sql`(datetime('now'))`),
   },
-  (t) => ({ dueIdx: index("idx_srs_due").on(t.dueAt, t.suspended) }),
+  (t) => [ index("idx_srs_due").on(t.dueAt, t.suspended) ],
 );
 
 export const sessions = sqliteTable("sessions", {
@@ -128,10 +128,10 @@ export const responses = sqliteTable(
     latencyMs: integer("latency_ms"),
     createdAt: text("created_at").default(sql`(datetime('now'))`),
   },
-  (t) => ({
-    sessionIdx: index("idx_resp_session").on(t.sessionId),
-    createdIdx: index("idx_resp_created").on(t.createdAt),
-  }),
+  (t) => [
+    index("idx_resp_session").on(t.sessionId),
+    index("idx_resp_created").on(t.createdAt),
+  ],
 );
 
 export const unknownWords = sqliteTable("unknown_words", {
