@@ -49,10 +49,10 @@ builder (P1.5–P1.6) · **C** API & persistence (P1.7–P1.11) ·
 
 ### P1.1 Shared types & item-key helpers — `src/worker/keys.ts`
 
-- [ ] Types shared everywhere: `Grade` (`correct|shaky|incorrect`),
+- [x] Types shared everywhere: `Grade` (`correct|shaky|incorrect`),
       `Bucket` (`vocab_recog|kanji|reading|writing`), prompt kinds,
       self-grade (`solid|shaky|wrong`).
-- [ ] Pure builders/validators for DATA-MODEL "Item keying" formats:
+- [x] Pure builders/validators for DATA-MODEL "Item keying" formats:
       `vocab:jlpt:n5:毎朝:meaning` · `…:reading` · `…:produce` ·
       `kanji:一:onkun`; and `prompt_key` formats per API.md
       (`r:jlpt:n5:毎朝:meaning`, `w:jlpt:n3:合図:produce`).
@@ -64,7 +64,22 @@ pulling in DB or HTTP code.
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-17 · decided: (1) prompt_key shapes not shown in API.md
+settled as `r:kanji:一:onkun` (kanji reading) and `w:n3:school-day`
+(writing bank) — `w:jlpt:…` (production) vs `w:<level>:…` (writing) can
+never collide because segment 2 is `jlpt` vs an n1..n5 level, and the
+parsers enforce exact segment counts; (2) error style: builders take
+typed/trusted input and throw on invalid segments (empty, contains `:`,
+ordinal < 1 or non-integer), parsers handle untrusted API-supplied keys
+and return null on any malformed key (wrong segment count, bad level,
+unknown prefix/direction, `q` segment must match q[1-9][0-9]*);
+(3) `itemKeyFromPromptKey` is the single prompt→item mapping for the
+builder and /api/responses (P1.10); capture prompts map to null (D-5 —
+no SRS identity until queued); (4) shared enums ship as const arrays +
+type unions with runtime guards (isLevel/isGrade/isSelfGrade/isBucket/
+isPromptKind/isVocabDirection) for P1.7/P1.10 request validation ·
+commits: (not committed — `npm run check` green: 47 new tests in
+tests/keys.test.ts, 54 total) )
 ```
 
 ### P1.2 SM-2 kernel — `src/worker/srs.ts`
