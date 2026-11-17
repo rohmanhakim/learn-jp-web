@@ -176,15 +176,15 @@ committed — npm run check green: 52 new tests in tests/normalize.test.ts,
 
 ### P1.4 Grading rules — `src/worker/grader.ts`
 
-- [ ] `keyword` (recall/meaning): any expected keyword contained in
+- [x] `keyword` (recall/meaning): any expected keyword contained in
       the answer **or** vice versa → correct; partial token overlap
       only → `shaky` (decision D-4); none → incorrect.
-- [ ] `normalized exact` (recall/reading, kanji_reading): equals any
+- [x] `normalized exact` (recall/reading, kanji_reading): equals any
       reading alternative after normalization.
-- [ ] `production` merge matrix: checks pass + `solid` → correct;
+- [x] `production` merge matrix: checks pass + `solid` → correct;
       checks pass + `shaky` → shaky; checks fail **or** `wrong` →
       incorrect.
-- [ ] Grading result carries the correct answer through for the
+- [x] Grading result carries the correct answer through for the
       inline "learning moment" display (UX: `✗ — correct was …`).
 
 **Acceptance:** unit tests cover each rule (hit, miss,
@@ -195,7 +195,39 @@ sends raw, server normalizes — UX.md).
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-17 · decided: (1) D-8 (Decisions below) — `keyword`
+matches on full normalized equality OR contiguous token-sequence
+containment either way, never substring: the P1.3 heads-up was shown
+to misgrade real seed cases (`thing` ⊃ `in`, `news` ⊃ `new`, `earth`
+⊃ `art`, `this` ⊃ single-char `i`), and a length floor would fix only
+the ≤2-char keywords while leaving ≥3-char substrings broken;
+LEARNING-DESIGN §2's keyword row amended in the same change;
+(2) D-4 partial = ≥1 shared token between the raw answer and the raw
+alternatives' tokens (tokenize = lowercase → NFKC → split on
+non-alphanum — same char class as `normalizeKeyword` but keeping the
+word boundaries matching needs); zero shared tokens, or an
+empty/whitespace/punctuation-only answer → incorrect; (3) production:
+§2 merge matrix verbatim, plus null `self_grade` with passing checks
+→ shaky — never credit `correct` without the user's verdict (P1.7's
+schema will require the field anyway); `must_contain` compared via
+`normalizeExact` on both sides (symmetric NFKC/width/kana fold —
+target as written, kanji↔kana never converts), all-or-nothing across
+tokens, each verdict returned in `checks` for UX's `✓/✗ contains`
+line; empty `must_contain` = vacuous pass (P1.5 always emits ≥1);
+(4) types exported from `grader.ts`: `GradingSpec` union
+(`keyword`/`normalized_exact`/`production` with RAW
+`alternatives`/`must_contain` strings — the grader owns all
+normalization, P1.7 derives its Zod schemas from this union) and
+`GradeResult { grade, correctAnswer, checks? }` — `correctAnswer` =
+raw alternatives joined `"; "` (the §2 learning moment),
+`checks` only on production; rule-name spelling settled as
+`normalized_exact`; (5) `normalize.ts` gained `splitAlternatives()`
+(paren-drop → split on `;`/`,` → trim → drop empties — the raw view of
+the same pipeline `expectedKeywords` runs; `expectedKeywords`
+refactored onto it, its 52 fixtures unchanged); grader is total:
+unknown rule and empty answers grade incorrect, never throws ·
+commits: (not committed — npm run check green: 25 new tests in
+tests/grader.test.ts, 147 total) )
 ```
 
 ---
@@ -523,6 +555,20 @@ updating this file together with the affected design docs, per
   `magazine`, `e.g. one's step` into standalone correct answers;
   keep-text-strip-brackets — yields `pinwheelttoy`, which matches
   neither `pinwheel` nor `toy`, failing legitimate answers.
+- **D-8 · keyword matching = equality + contiguous token sequence (P1.4).**
+  `keyword` grades `correct` only when the normalized answer equals an
+  expected alternative (so a space-less `everymorning` still hits) or one
+  side's token sequence contains the other's **contiguously, in either
+  direction**; bare substring containment is rejected. Context: the
+  P1.3 heads-up — 13 single-char keywords plus short ones like
+  `in`/`or`/`me` under §2's either-way substring rule misgrade real
+  answers (`thing` ⊃ `in`, `news` ⊃ `new`, `earth` ⊃ `art`), and a
+  minimum-length floor would still leave every ≥3-char case broken.
+  Consequences: LEARNING-DESIGN §2's keyword row amended in the same
+  change; D-4's partial overlap is pinned as ≥1 shared token (no full
+  match) → `shaky`, zero shared tokens → `incorrect`. *Rejected:*
+  substring + length floor (fixes only ≤2-char keywords, keeps the rest);
+  substring verbatim (keeps the misgrades, would defer a §2 amendment).
 
 ## Notes
 

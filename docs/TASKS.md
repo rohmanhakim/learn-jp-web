@@ -49,7 +49,7 @@ Recall prompts only — the loop itself must exist before content depth.
 
 - [x] SM-2 kernel (`srs` module) with unit tests for every grade path
       (first rep, second rep, mature, lapse, ease floor)
-- [ ] Grading rules: `keyword`, `normalized exact` (+ NFKC, kana
+- [x] Grading rules: `keyword`, `normalized exact` (+ NFKC, kana
       normalization) with normalization unit tests; parity fixture
       table with hardcoded expected outputs (guards the one TS
       portability risk flagged in D11)

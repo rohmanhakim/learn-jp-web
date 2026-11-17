@@ -50,7 +50,7 @@ on graded response g ∈ {correct, shaky, incorrect}:
 
 | Kind | Stimulus → Input | Grade rule |
 |---|---|---|
-| `recall/meaning` | JP word → type EN meaning | **keyword**: normalize (lowercase, strip punct/whitespace); split expected on `;` `,` **after dropping parenthetical groups** (qualifiers, not alternate answers — Phase-001 D-7); correct if any expected keyword is contained in the answer or vice versa |
+| `recall/meaning` | JP word → type EN meaning | **keyword**: normalize (lowercase, strip punct/whitespace); split expected on `;` `,` **after dropping parenthetical groups** (qualifiers, not alternate answers — Phase-001 D-7); correct if the answer equals an expected alternative after normalization (so `everymorning` ≡ `every morning`) **or** one side's token sequence (lowercase, NFKC, split on non-alphanum) contains the other's **contiguously, in either direction** — never bare substring, which let short keywords misgrade unrelated answers (Phase-001 D-8); ≥1 shared token without a full match → `shaky` (D-4), no shared tokens → `incorrect` |
 | `recall/reading` | EN meaning (or JP word+hint) → type kana | **normalized exact**: NFKC, strip whitespace, katakana→hiragana; correct if equals any reading alternative |
 | `kanji_reading` | kanji (in word context) → type kana | same as `recall/reading`; accept either on or kun reading when the word permits both |
 | `production` | word/pattern → write a sentence | **deterministic checks**: must contain the target; any `required_tokens` present; optional simple particle/pattern presence checks. Grade = checks verdict, then merged with self-grade: checks pass + `solid` → `correct`; checks pass + `shaky` → `shaky`; checks fail or `wrong` → `incorrect` |

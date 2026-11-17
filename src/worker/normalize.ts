@@ -57,16 +57,32 @@ export function normalizeKeyword(input: string): string {
  * stray `)` is dropped.
  */
 export function expectedKeywords(raw: string): string[] {
-  const parts = dropParenGroups(raw.normalize("NFKC")).split(/[;,]/);
   const seen = new Set<string>();
   const keywords: string[] = [];
-  for (const part of parts) {
+  for (const part of splitAlternatives(raw)) {
     const keyword = normalizeKeyword(part);
     if (keyword === "" || seen.has(keyword)) continue;
     seen.add(keyword);
     keywords.push(keyword);
   }
   return keywords;
+}
+
+/**
+ * §2's split of a stored expected answer into raw (unnormalized)
+ * alternatives: drop balanced `(...)` groups first (D-7), then split on
+ * `;`/`,`, trim, drop empties — the same pipeline `expectedKeywords`
+ * runs, one step short of normalization.
+ *
+ * The grader (P1.4) consumes these raw parts for its no-space equality
+ * path and D-4 token overlap, where the pre-normalization word boundaries
+ * must survive (a normalized keyword like `everymorning` has none).
+ */
+export function splitAlternatives(raw: string): string[] {
+  return dropParenGroups(raw.normalize("NFKC"))
+    .split(/[;,]/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
 }
 
 /** Remove balanced `(...)` groups from `text`, nesting-aware. */
