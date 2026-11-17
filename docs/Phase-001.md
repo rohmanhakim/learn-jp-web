@@ -236,12 +236,12 @@ tests/grader.test.ts, 147 total) )
 
 ### P1.5 Prompt factory — `src/worker/prompts.ts`
 
-- [ ] Vocabulary/kanji row → prompt object (`prompt_key`, `kind`,
+- [x] Vocabulary/kanji row → prompt object (`prompt_key`, `kind`,
       `bucket`, `is_new`, `instruction`, `stimulus`, `input`,
       `grading`) exactly in API.md shapes.
-- [ ] `kanji_reading` accepts on **or** kun reading when the word
+- [x] `kanji_reading` accepts on **or** kun reading when the word
       permits both (LEARNING-DESIGN §2).
-- [ ] `production` → `grading: { rule: "production", must_contain: [surface] }`.
+- [x] `production` → `grading: { rule: "production", must_contain: [surface] }`.
 
 **Acceptance:** golden-prompt tests for one vocab `meaning`, one
 vocab `reading`, one `kanji_reading`, and one `production` prompt;
@@ -251,7 +251,47 @@ keys match P1.1 formats so the builder and `/api/responses` agree on
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-17 · decided: (1) D-9 — wire `input` enum settled as
+`text` | `text+selfgrade` | `choice`, exported as `PROMPT_INPUTS` from
+prompts.ts so P1.7 derives one schema from it; API.md's line-59 comment
+said `selfgrade+text`, contradicting its own worked example — example
+wins, comment amended in the same change; (2) D-10 — recall/reading
+cue = the raw EN `meaning`, VERBATIM (§2's primary "EN meaning → type
+kana"; a cue is display text and never processed — the grading path
+splits the gloss itself), keeping the two recall directions visually
+distinct (JP vs EN stimulus); kanji_reading stimulus = the bare
+character: §2's "(in word context)" is unreachable from a `kanji` row
+(item key `kanji:一:onkun` is character-scoped, the table has no word
+column), so a vocab join inside a pure factory was rejected — instead
+alternatives = the full on+kun set with KANJIDIC okurigana markers
+(`.`/`-`) stripped (`ひと.つ`→`ひとつ`, `ひと-`→`ひと`, `-うえ`→`うえ`;
+verified over all 2,091 rows that those two are the ONLY non-kana
+characters, and 0 rows become marker-only), i.e. "either family when
+the word permits both" degenerates to "any reading of the character" —
+lenient but never wrong-grade; LEARNING-DESIGN §2's kanji row amended
+in the same change; (3) D-11 — production stimulus = `${surface}
+(${first raw alternative})` → `合図 (sign)`; API.md's `合図 (signal)`
+example was illustrative and is aligned to the rule; (4) API surface:
+four factories `(row, { isNew }) → Prompt | null` with uniform
+null-tolerance — reading nulls on missing/blank reading (2 seed rows:
+jlpt:n1:伊井, jlpt:n2:一段と), meaning nulls when the gloss yields no
+alternatives (0 rows), kanji nulls with neither family (0 rows);
+production shares the signature (never nulls in practice); invalid
+`level` THROWS (invariant break — seed validation guarantees n5..n1,
+matching P1.1's builders) while null = content-driven skip the builder
+filters; `is_new` always caller-supplied (a prompt never infers
+recency); buckets: meaning/reading → vocab_recog, kanji → kanji,
+production → writing (API.md example + UX mockup); grading specs
+emitted RAW — meaning alternatives are `splitAlternatives(meaning)`
+(D-7 paren-drop), readings keep stored katakana — P1.4 owns all
+normalization — and always ≥1 entry (P1.4's vacuous-pass note); row
+types are plain structural interfaces mirroring the Drizzle columns,
+so prompts.ts stays DB-free and the builder passes rows straight in;
+(5) seed cross-checks: readings single-valued (0 rows with `;`/`,`),
+245 surfaces repeat across levels (harmless — prompt_key embeds the
+level), 11 kanji lack on / 285 lack kun / 0 lack both · commits: (not
+committed — npm run check green: 17 new tests in tests/prompts.test.ts,
+164 total) )
 ```
 
 ### P1.6 Session builder v1 — `src/worker/session-builder.ts`
@@ -569,6 +609,41 @@ updating this file together with the affected design docs, per
   match) → `shaky`, zero shared tokens → `incorrect`. *Rejected:*
   substring + length floor (fixes only ≤2-char keywords, keeps the rest);
   substring verbatim (keeps the misgrades, would defer a §2 amendment).
+- **D-9 · wire `input` spelling (P1.5).** The enum is `text` |
+  `text+selfgrade` | `choice`, exported from `prompts.ts` as
+  `PROMPT_INPUTS` so P1.7 derives one schema from it and no second
+  spelling exists anywhere. Context: API.md's line-59 comment said
+  `selfgrade+text` while its own worked example (line 69) and the UX
+  copy say `text+selfgrade`. *Rejected:* following the comment — it
+  would have forced the example, the mockups, and this file to change.
+- **D-10 · recall/reading cue = raw EN meaning; kanji_reading
+  stimulus = bare character (P1.5).** §2 allows either cue for
+  `recall/reading` ("EN meaning (or JP word+hint)"); the EN gloss is
+  its primary wording, keeps the two recall directions visually
+  distinct (JP vs EN stimulus), and is emitted VERBATIM — a cue is
+  display text, never processed; the grading path splits the gloss
+  itself. For `kanji_reading`, §2's "(in word context)" is
+  unreachable from a `kanji` row: `item_key` is character-scoped
+  (`kanji:一:onkun`) and the table has no word column, so the
+  stimulus is the bare character and the alternatives are the full
+  on+kun set with KANJIDIC okurigana markers (`.`/`-`) stripped —
+  the only non-kana characters across all 2,091 seed rows, so no
+  reading becomes marker-only. Consequences: LEARNING-DESIGN §2's
+  kanji_reading row amended in the same change; "accept on or kun
+  when the word permits both" becomes "any reading of the character"
+  (lenient, never wrong-grade; exact-match still applies per
+  alternative). *Rejected:* JP-surface reading cue (allowed by §2,
+  but the EN cue is primary and disambiguates the two recall
+  directions); word-context stimulus via a vocab join (DB dependency
+  inside a pure module; the stimulus would vary for a
+  character-scoped item while the graded identity stays fixed).
+- **D-11 · production stimulus = `surface (first alternative)`
+  (P1.5).** `${content} (${splitAlternatives(meaning)[0]})`, e.g.
+  `合図 (sign)`; bare surface when the gloss yields no alternatives.
+  API.md's `合図 (signal)` example was illustrative and is aligned to
+  the rule in the same change. *Rejected:* the raw full gloss inline —
+  2,844 seed meanings contain parentheses and the cue would drown the
+  prompt.
 
 ## Notes
 

@@ -56,7 +56,7 @@ Response:
       "is_new": false,
       "instruction": "Type the meaning",
       "stimulus": "毎朝",
-      "input": "text",                    // text | choice | selfgrade+text
+      "input": "text",                    // text | text+selfgrade | choice
       "grading": {"rule": "keyword", "alternatives": ["every morning"]}
     },
     {
@@ -65,7 +65,7 @@ Response:
       "bucket": "writing",
       "is_new": true,
       "instruction": "Write a sentence using 合図",
-      "stimulus": "合図 (signal)",
+      "stimulus": "合図 (sign)",
       "input": "text+selfgrade",
       "grading": {"rule": "production", "must_contain": ["合図"]}
     },
