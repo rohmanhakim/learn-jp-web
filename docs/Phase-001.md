@@ -126,9 +126,9 @@ committed — npm run check green: 16 new tests in tests/srs.test.ts,
 
 ### P1.3 Text normalization + parity fixtures — `src/worker/normalize.ts`
 
-- [ ] `normalizeExact`: NFKC → strip whitespace → katakana→hiragana
+- [x] `normalizeExact`: NFKC → strip whitespace → katakana→hiragana
       (reading-answer path).
-- [ ] `normalizeKeyword`: lowercase → NFKC → strip punctuation /
+- [x] `normalizeKeyword`: lowercase → NFKC → strip punctuation /
       whitespace; plus expected-keyword splitting on `;` `,`
       `(`…`)`.
 
@@ -142,7 +142,36 @@ whitespace, and punctuation cases.
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-17 · decided: (1) D-7 (Decisions below) — parenthetical
+groups dropped BEFORE splitting on `;`/`,`; LEARNING-DESIGN §2 amended in
+the same change; (2) orders verbatim from §2/this file — `normalizeExact`:
+NFKC → strip `[\s\p{Cf}]` (whitespace incl. U+3000/NBSP, plus invisible
+format chars like U+200B) → fold U+30A1–U+30F6 by −0x60 (`ー`, `ヷヸヹヺ`,
+`ヽヾ` untouched, pinned by fixture); `normalizeKeyword`: lowercase → NFKC
+→ keep only `\p{L}`/`\p{N}` (en dash, `・`, `！`, quotes all fall out with
+punctuation; NO kana folding on the keyword path — §2 doesn't ask for it,
+pinned deliberately so the asymmetry with exact is a choice, not a bug);
+(3) exported splitter name `expectedKeywords(raw)` returns already
+normalized, deduped keywords (first-seen order) so P1.4 is pure
+containment: NFKC-fold → depth-aware `(...)` drop (1 seed row nests:
+`dog (Canis (lupus) familiaris)…`) → split `[;,]` → normalizeKeyword →
+drop empties → dedupe; unbalanced brackets are absent from the seed but
+tolerated (stray `)` dropped, unclosed `(` swallows the rest, both pinned
+by fixture); (4) parity (D11): halfwidth dakuten composes under NFKC in
+BOTH engines (`ﾊﾟ`→`パ`→`ぱ`; `か+U+3099`→`が` U+304C), and a Python
+`unicodedata` replica of the whole pipeline was run one-off at authoring
+time over all 8,334 seed meanings with identical output — fixture
+literals themselves are hardcoded, never generated at runtime; (5) seed
+reality checked: 7,818 meanings use `;`, 2,844 use `(`, 864 have a comma
+inside parens, 0 unbalanced and 0 ideographic punctuation (、；，：（）),
+so no ideographic splitting was added — every meaning yields ≥1 keyword
+(enforced by a seed smoke test over all rows); (6) heads-up for P1.4:
+seed glosses yield 13 single-char keywords (`i`, `a`, `b`, digits, `圓`)
+and short ones like `or`/`in`/`me` — with containment-either-way that
+loosens grading (any answer containing `i` would pass that word);
+grader-side handling is deliberately out of P1.3's scope · commits: (not
+committed — npm run check green: 52 new tests in tests/normalize.test.ts,
+122 total) )
 ```
 
 ### P1.4 Grading rules — `src/worker/grader.ts`
@@ -482,6 +511,18 @@ updating this file together with the affected design docs, per
   `interval = 0 → 1` on `correct` (recovery hidden in a branch;
   `reps` would mean "lifetime completions", which nothing reads);
   strict verbatim §1 (items frozen at interval 0).
+- **D-7 · parentheticals in expected keywords (P1.3).**
+  `expectedKeywords` drops balanced `(...)` groups *before* splitting
+  on `;`/`,` — a parenthetical is a qualifier on a gloss, not an
+  alternate answer (`toy` alone must not grade 風車 correct unless the
+  answer contains `windmill`; `(book, magazine, etc.)` must not yield
+  `etc`/`magazine`). Order matters: splitting first would cut commas
+  inside the group (864 seed rows have one; 1 row nests parens).
+  LEARNING-DESIGN §2's `(`…`)` clause amended in the same change.
+  *Rejected:* the literal "split on `(`…`)`" reading — turns `etc`,
+  `magazine`, `e.g. one's step` into standalone correct answers;
+  keep-text-strip-brackets — yields `pinwheelttoy`, which matches
+  neither `pinwheel` nor `toy`, failing legitimate answers.
 
 ## Notes
 
