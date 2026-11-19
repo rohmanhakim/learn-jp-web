@@ -542,16 +542,16 @@ commits: a0378a41fa03e69987ffc774bd44573ca05c9255)
 
 ### P1.10 `POST /api/responses` (batch)
 
-- [ ] Per item: grade server-side (P1.4) → apply SM-2 (P1.2) →
+- [x] Per item: grade server-side (P1.4) → apply SM-2 (P1.2) →
       upsert `srs_state`, insert `responses` row.
-- [ ] Partially-successful semantics: per-item `results`, known
+- [x] Partially-successful semantics: per-item `results`, known
       `response_uuid`s reported `duplicate: true` (client drops
       them from its queue).
-- [ ] `kind_hint: "fast_skip"` → `srs_state` row with
+- [x] `kind_hint: "fast_skip"` → `srs_state` row with
       `suspended = 1, due_at = now + 30d` (LEARNING-DESIGN §1
       fast-skip) plus the summary-derivable record per decision
       D-1.
-- [ ] `kind_hint: "unknown_word"` → **deferred to Phase 3** (no
+- [x] `kind_hint: "unknown_word"` → **deferred to Phase 3** (no
       passages exist yet); contract may reserve the field (D-5).
 
 **Acceptance:** tests cover a mixed-grade batch updating SRS
@@ -564,7 +564,45 @@ item while non-duplicates still land.
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided:
+(1) migration: D-1's `kind_hint` column AND `responses.grade` → nullable
+    land in ONE Drizzle rebuild migration (0001_superb_black_tom) — a
+    fast-skip/capture row has nothing graded, so `grade NULL ⇔ kind_hint
+    set` (user decision; DATA-MODEL.md DDL synced in the same change).
+    Repaired drizzle.config.ts `schema` to ./drizzle/schema/**/*.ts — it
+    still pointed at drizzle/schema.ts, which commit 64ad7bd deleted.
+(2) duplicate replay: stored `grade`, display fields (correct_answer /
+    checks) RECOMPUTED from the snapshot spec + stored answer —
+    gradeAnswer is pure, so output is byte-identical; a disagreement with
+    the stored grade is corruption → 500. `srs` block reads the CURRENT
+    srs_state row. Zero writes on replay (user decision).
+(3) error split: the whole batch is validated (session, prompt_key ∈
+    snapshot, item_key ≡ itemKeyFromPromptKey, kind_hint) BEFORE any
+    write; violations throw InvalidRequestError → 400 invalid_request,
+    everything else → 500 internal_error. So unknown session / foreign
+    prompt / item_key mismatch / unknown_word (Phase 3, D-5) all leave
+    zero rows (user decision; responseResultSchema has no per-item error
+    field, so 400 is the only contract-expressible outcome).
+(4) fast-skip = upsert: existing row keeps ease/interval/reps/lapses and
+    only gets suspended=1 + due_at=now+30d; new row = initialSrsState +
+    suspend (interval_days stays 0). The endpoint does NOT re-check
+    fast_skip_available — the session row necessarily exists by answer
+    time, so the gate lives in the P1.15 UI (user decision).
+(5) per-item writes run in one db.batch each (D1 batches are
+    transactional): the UUID claim and the SRS application commit
+    together; a UNIQUE race re-selects and answers the duplicate path
+    (P1.9 precedent).
+(6) stored `bucket` and `srs_state.kind` come from the SERVED prompt,
+    never the client echo — accuracy can't be poisoned by a bad client.
+(7) retired the two deferrals: bucketAccuracies now carries
+    `AND kind_hint IS NULL` (session-builder.ts header + status.ts
+    inherited caveat rewritten) — a fast-skip counts in neither
+    numerator nor denominator.
+(8) tests: tests/responses.test.ts (7 tests, workerd). No content seed —
+    grading reads a hand-built 4-prompt snapshot fixture, so grades and
+    SM-2 expectations are exact. Heads-up for fixtures: the production
+    prompt_key is `w:jlpt:n3:合図:produce` (5 segments).
+commits: )
 ```
 
 ### P1.11 `POST /api/session/complete`

@@ -1,17 +1,21 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import {
+  type ResponsesRequest,
+  type ResponsesResponse,
   type SessionStartRequest,
   type SessionStartResponse,
   type StatusResponse,
+  responsesRequestSchema,
   sessionStartRequestSchema,
 } from "./api-types";
+import { InvalidRequestError, saveResponses } from "./responses";
 import { startSession } from "./session-start";
 import { statusPayload } from "./status";
 
 // The worker serves the SPA shell (via static assets) plus the REST API
-// (API.md). P1.8 lands `GET /api/status`, P1.9 `POST /api/session/start`;
-// P1.10-P1.11 add the remaining two routes.
+// (API.md). P1.8 lands `GET /api/status`, P1.9 `POST /api/session/start`,
+// P1.10 `POST /api/responses`; P1.11 adds the last route.
 //
 // P1.7: routes are registered by CHAINING off the constructor — that
 // is what puts them into `typeof app` and therefore into `AppType`
@@ -21,7 +25,8 @@ import { statusPayload } from "./status";
 // P1.9: `POST /api/session/start` carries `zValidator("json",
 // sessionStartRequestSchema)` on the way in and a typed payload on the
 // way out, so its request/response types are compile-time checked on the
-// client (DECISIONS D11). P1.10-P1.11 extend this chain the same way.
+// client (DECISIONS D11). P1.10's route below extends the chain the
+// same way; P1.11 will too.
 // `GET /api/status` has no request body to validate — its typing comes
 // from `c.json<StatusResponse>` below, and tests parse the served body
 // with `statusResponseSchema` at runtime.
@@ -33,6 +38,13 @@ import { statusPayload } from "./status";
 // Notes item 10) — the validator hook below rewrites it to
 // `invalid_request`, so every branch the client can decode follows the
 // same contract.
+//
+// P1.10 — `POST /api/responses`: same chain, PLUS the domain split
+// between errors: a `InvalidRequestError` thrown by the payload module
+// (unknown session, prompt_key outside the snapshot, item_key mismatch,
+// Phase-3 capture) is the CLIENT's fault → 400 `invalid_request` with
+// the same code the validator hook pins; anything else (corruption,
+// D1 failure) → 500 `internal_error` like the other two routes.
 const app = new Hono<{ Bindings: Cloudflare.Env }>().get(
   "/api/status",
   async (c) => {
@@ -60,6 +72,31 @@ const app = new Hono<{ Bindings: Cloudflare.Env }>().get(
       return c.json<SessionStartResponse>(payload);
     } catch (err) {
       const message = err instanceof Error ? err.message : "session start unavailable";
+      return c.json({ error: { code: "internal_error", message } }, 500);
+    }
+  },
+).post(
+  "/api/responses",
+  zValidator("json", responsesRequestSchema, (result, c) => {
+    if (result.success) return;
+    const detail = result.error.issues
+      .map((issue) => `${issue.path.join(".") || "body"}: ${issue.message}`)
+      .join("; ");
+    return c.json({ error: { code: "invalid_request", message: detail } }, 400);
+  }),
+  async (c) => {
+    try {
+      const request: ResponsesRequest = c.req.valid("json");
+      const payload: ResponsesResponse = await saveResponses(c.env.DB, new Date(), request);
+      return c.json<ResponsesResponse>(payload);
+    } catch (err) {
+      // Contract violation the client must see (unknown session, prompt
+      // outside the snapshot, Phase-3 capture …) — payload module throws
+      // InvalidRequestError for exactly these.
+      if (err instanceof InvalidRequestError) {
+        return c.json({ error: { code: "invalid_request", message: err.message } }, 400);
+      }
+      const message = err instanceof Error ? err.message : "responses unavailable";
       return c.json({ error: { code: "internal_error", message } }, 500);
     }
   },

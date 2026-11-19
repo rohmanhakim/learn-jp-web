@@ -16,8 +16,13 @@ export const responses = sqliteTable(
     promptKey: text("prompt_key").notNull(),
     itemKey: text("item_key"),
     answer: text("answer"),
-    grade: text("grade").notNull(),
+    // NULL exactly when `kind_hint` is set (D-1 fast-skip / capture rows
+    // carry nothing graded) — DATA-MODEL.md `responses` DDL.
+    grade: text("grade"),
     selfGrade: text("self_grade"),
+    // 'fast_skip' | 'unknown_word' | NULL (decision D-1) — rows with a
+    // hint are excluded from bucket-accuracy queries (§3).
+    kindHint: text("kind_hint"),
     bucket: text("bucket").notNull(),
     latencyMs: integer("latency_ms"),
     createdAt: text("created_at").default(sql`(datetime('now'))`),

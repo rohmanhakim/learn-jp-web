@@ -19,8 +19,7 @@
 // UTC ISO-8601, so lexicographic comparison and MAX() are correct.
 //
 // Inherited caveat: `weakest_bucket` runs through `bucketAccuracies`,
-// which predates D-1's `kind_hint` column (P1.10 adds
-// `AND kind_hint IS NULL` in the same change) — /api/status inherits
+// which filters `AND kind_hint IS NULL` (D-1) — /api/status inherits
 // that filter exactly like the builder does, by construction.
 
 import { type StatusResponse } from "./api-types";

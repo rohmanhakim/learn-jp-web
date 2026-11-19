@@ -183,9 +183,10 @@ CREATE TABLE responses (
     client_uuid TEXT UNIQUE NOT NULL,       -- idempotent offline replay
     prompt_key  TEXT NOT NULL,              -- stable key of the prompt
     item_key    TEXT,                       -- SRS target (NULL for passage MC)
-    answer      TEXT,                       -- user's raw input
-    grade       TEXT NOT NULL,              -- 'correct'|'incorrect'|'shaky'
+    answer      TEXT,                       -- user's raw input (NULL on fast-skip)
+    grade       TEXT,                       -- 'correct'|'incorrect'|'shaky' | NULL when kind_hint set (D-1)
     self_grade  TEXT,                       -- 'solid'|'shaky'|'wrong' | NULL
+    kind_hint   TEXT,                       -- 'fast_skip'|'unknown_word' | NULL (D-1; excluded from accuracy)
     bucket      TEXT NOT NULL,              -- skill bucket (see below)
     latency_ms  INTEGER,
     created_at  TEXT DEFAULT (datetime('now'))

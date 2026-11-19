@@ -22,8 +22,9 @@
 // bucket falls through to the next actionable bucket; a
 // `passage_question` is never served. Accuracy follows §3: correct /
 // total graded responses over the last 7 days, a bucket with no data is
-// neutral and never weakest. The query predates D-1's `kind_hint`
-// column (P1.10 adds `AND kind_hint IS NULL` in the same change).
+// neutral and never weakest. The query excludes D-1's `kind_hint`
+// rows (`AND kind_hint IS NULL`): a fast-skip is recorded but never
+// counts as a graded response (LEARNING-DESIGN §3).
 
 import {
   BUCKETS,
@@ -135,7 +136,8 @@ export async function dueCount(db: D1Database, now: Date): Promise<number> {
 /**
  * Rolling 7-day accuracy per bucket (§3): `correct / total graded`
  * responses in the window; buckets with no rows stay `null` (neutral).
- * See the D-1 note in the header — P1.10 adds `AND kind_hint IS NULL`.
+ * `kind_hint` rows (D-1 fast-skip) are excluded — a skip is not a
+ * graded response.
  */
 export async function bucketAccuracies(db: D1Database, now: Date): Promise<BucketAccuracies> {
   const since = sqliteDateTime(new Date(now.getTime() - ROLLING_WINDOW_DAYS * MS_PER_DAY));
@@ -145,7 +147,7 @@ export async function bucketAccuracies(db: D1Database, now: Date): Promise<Bucke
               SUM(CASE WHEN grade = 'correct' THEN 1 ELSE 0 END) AS correct,
               COUNT(*) AS total
          FROM responses
-        WHERE created_at >= ?
+        WHERE created_at >= ? AND kind_hint IS NULL
         GROUP BY bucket`,
     )
     .bind(since)
