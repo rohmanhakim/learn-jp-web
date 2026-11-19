@@ -15,6 +15,10 @@
 import { hc } from "hono/client";
 import type {
   ApiError as ApiErrorBody,
+  ResponsesRequest,
+  ResponsesResponse,
+  SessionCompleteRequest,
+  SessionCompleteResponse,
   SessionStartRequest,
   SessionStartResponse,
   StatusResponse,
@@ -60,5 +64,35 @@ export async function startSession(request: SessionStartRequest): Promise<Sessio
   const res = await client.api.session.start.$post({ json: request });
   return unwrap<SessionStartResponse>(
     (await res.json()) as SessionStartResponse | { error: ApiErrorBody },
+  );
+}
+
+/**
+ * POST /api/responses — one graded answer per call from the session
+ * screen (P1.13); the endpoint accepts a batch, Phase 2's offline queue
+ * flushes several at once. Grading is server-side (LEARNING-DESIGN §2),
+ * so the returned `results[0]` carries the inline verdict: `grade`,
+ * `correct_answer` and the production `checks`.
+ */
+export async function sendResponses(request: ResponsesRequest): Promise<ResponsesResponse> {
+  const res = await client.api.responses.$post({ json: request });
+  return unwrap<ResponsesResponse>(
+    (await res.json()) as ResponsesResponse | { error: ApiErrorBody },
+  );
+}
+
+/**
+ * POST /api/session/complete — finalize (idempotent server-side: the
+ * write happens once, the body is recomputed per call). The session
+ * screen calls this both after the last prompt and on confirmed exit,
+ * with `duration_sec` counted from screen entry; answers that landed
+ * already are what the summary counts.
+ */
+export async function completeSession(
+  request: SessionCompleteRequest,
+): Promise<SessionCompleteResponse> {
+  const res = await client.api.session.complete.$post({ json: request });
+  return unwrap<SessionCompleteResponse>(
+    (await res.json()) as SessionCompleteResponse | { error: ApiErrorBody },
   );
 }

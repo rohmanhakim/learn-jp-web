@@ -768,7 +768,60 @@ block on showing the next prompt.
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided:
+(1) production check feedback — grading needs the self-grade, which does
+    not exist until the next tap, so /api/responses cannot produce the
+    ✓/✗ contains line at submit time. The line shown after submit is a
+    LOCAL display-only preview computed with the SAME formula as
+    grader.ts (normalizeExact is a pure zero-import module, imported
+    client-side, so parity holds by construction). The response is sent
+    ONCE, after the self-grade tap; the final verdict renders the
+    SERVER's `checks` + `grade`. Server stays authoritative (§2).
+(2) exit — native window.confirm() (one dialog, no ceremony) → await the
+    in-flight /api/responses promise → POST /session/complete with
+    duration_sec from screen entry → oncomplete(result). Counts derive
+    from `responses` rows, so partial exits count (verified live:
+    complete after one answer → reviews {done: 1}). Nuance: an answer
+    still at the self-grade step when ✕ is pressed was never sent (the
+    contract requires self_grade), so it is not counted. If the complete
+    call fails, oncomplete(null) reaches App — P1.14 owns that view.
+(3) network policy — the next prompt ALWAYS renders from the in-memory
+    snapshot; the verdict races the single /api/responses call against a
+    1.2 s window whose timer starts AT SUBMIT, so a hung call cannot
+    block advancing (late results only paint while their window is open,
+    guarded by index + phase). Failures are console-logged only; Phase
+    2's queue replaces this wholesale. Blank answers blocked client-side.
+(4) structure — src/client/api.ts gains sendResponses + completeSession
+    (same unwrap pattern); Session.svelte is a 3-phase state machine
+    (answering → checks → verdict) holding one prompt in memory; item_key
+    is derived client-side via itemKeyFromPromptKey (pure keys.ts — the
+    P1.12 type-only rule targets Hono/D1 runtime; verified live:
+    r:jlpt:n5:時間:meaning → vocab:jlpt:n5:時間:meaning). App.svelte
+    stores `completed`; the done branch is now a working Done-lite (real
+    answered count + streak + next preview + a Done button home — UX.md's
+    exit → Done-lite summary); P1.14 replaces it wholesale.
+(5) copy/interaction — chip labels are short nouns (BUCKET_SHORT:
+    vocab_recog→vocab) because session-builder's bucketLabel is sentence
+    copy; the production line = instruction + gloss sliced off `stimulus`
+    after must_contain[0] (matches UX.md "…using 合図 (signal)"); recall
+    renders stimulus above instruction (mock order), production only the
+    combined line; ⏎/Enter is IME-guarded (e.isComposing), Shift+Enter
+    is the textarea newline escape; self-grade shortcuts 1/2/3 bind on
+    window while phase=checks — the field is blurred on submit so digits
+    never enter the answer; verdict copy per UX.md (✓ correct / ~ shaky /
+    ✗ — correct was X; production failures read via the checks line) in
+    a persistent role=status aria-live=polite line; latency_ms =
+    shownAt → submit; fields are readonly outside `answering`.
+(6) verification — npm run check green (lint + wrangler types --check +
+    tsc + 241 tests); vite build clean (fixed one state_referenced_
+    locally warning: total → $derived); live dev smoke: status → start
+    (4 prompts) → responses (grade incorrect, correct_answer "time;
+    hour; period; class", srs interval 0) → complete (summary + real
+    preview) → status updated, GET / → 200. NOT yet done: the human
+    eyeball walkthrough against UX.md's mockups (recall + production +
+    exit mid-session + ≤5 s tap-to-first-prompt) — the three checkboxes
+    stay unticked until that pass.
+commits: )
 ```
 
 ### P1.14 Done screen
