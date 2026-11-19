@@ -482,7 +482,7 @@ tables wiped per test) · commits: 81948042e7233391dc3367708fa13d100d5dc645
 
 ### P1.9 `POST /api/session/start`
 
-- [ ] Calls the builder; inserts `sessions` row (`client_uuid`,
+- [x] Calls the builder; inserts `sessions` row (`client_uuid`,
       `started_at`, `snapshot`); response
       `title: "Session N · 10–15 min"`.
 
@@ -494,7 +494,50 @@ API.md), (c) the response parses as the `AppType` schema.
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided: (1) idempotency reads BEFORE it builds —
+the handler SELECTs `sessions` by `client_uuid` first and a replay answers
+from the STORED snapshot (DATA-MODEL: "keeps exactly what was served"):
+a fresh composition could differ (different `now` ⇒ different due set, and
+`fast_skip_available` already flipped to false once a row exists); the
+fresh path is one `INSERT … RETURNING id, snapshot` whose UNIQUE violation
+(concurrent replay race) falls back to re-reading the stored row — same
+body, never a second row. (2) `title` = `Session ${N} · 10–15 min` where N
+is the row's ORDINAL (`COUNT(*) … WHERE id <= row.id`), not `COUNT(*)` at
+response time — rows are never deleted (DATA-MODEL "Retention &
+integrity"), so the ordinal is stable under replay and after later starts,
+which is exactly what acceptance (b)'s "identical body" needs; abandoned
+(uncompleted) sessions are rows and count too. The duration segment is a
+literal: `max_minutes` is a hint the server may ignore (API.md) and
+builder v1 has no time-based composition. `snapshot` is stored as
+`JSON.stringify(snapshot)` verbatim and the response re-serves the parsed
+snapshot — one source of truth, so stored and served cannot drift; a
+corrupt stored snapshot fails the `sessionSnapshotSchema` parse and
+surfaces as 500 rather than being silently recomposed. (3) validation
+failures: zValidator's default 400 body is zod's error, NOT API.md's
+`{error:{code,message}}` envelope (P1.7 Notes item 10) — a validator hook
+on the route rewrites it to `code: "invalid_request"` with the first-issue
+detail (`<path>: <message>; …`), so every branch `hc<AppType>` can decode
+(200 / 400 / 500) follows the contract; `internal_error` keeps P1.8's
+wording. This pins the error code for P1.10/P1.11. (4) `started_at` =
+`now.toISOString()` (UTC ISO-8601, DATA-MODEL); the handler owns the real
+clock (P1.8 precedent), `now` stays injectable for tests. (5) route
+registered by chaining with `zValidator("json", sessionStartRequestSchema,
+hook)` so it lands in `typeof app`/`AppType`; new module
+`src/worker/session-start.ts` mirrors `status.ts`'s shape (payload
+function + header comment, no HTTP in it) · tests:
+tests/session-start.test.ts, 8 tests in workerd against seeded D1 per
+status.test.ts conventions (seed once, runtime tables wiped per test):
+verbatim persistence (stored snapshot ≡ served body minus transport
+fields, ISO `started_at`, first-run `fast_skip_available`, never-zero
+prompts, empty `passages`), replay ≡ original + single row, ordinal
+numbering stable across later starts and replays, abandoned-row numbering,
+both 400-envelope cases with no row written, one end-to-end
+`hc<AppType>` call, plus compile-time `Equal` assertions (request type =
+`SessionStartRequest`, client view = `SessionStartResponse | {error}`);
+`npm run check` green: 225 total · live smoke: `npm run dev` + curl —
+fresh start serves the API.md body, replay is byte-identical (`cmp`),
+invalid body → 400 `invalid_request`, `/api/status` unregressed ·
+commits: a0378a41fa03e69987ffc774bd44573ca05c9255)
 ```
 
 ### P1.10 `POST /api/responses` (batch)
