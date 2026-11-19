@@ -78,8 +78,8 @@ builder and /api/responses (P1.10); capture prompts map to null (D-5 —
 no SRS identity until queued); (4) shared enums ship as const arrays +
 type unions with runtime guards (isLevel/isGrade/isSelfGrade/isBucket/
 isPromptKind/isVocabDirection) for P1.7/P1.10 request validation ·
-commits: (not committed — `npm run check` green: 47 new tests in
-tests/keys.test.ts, 54 total) )
+commits: (f296bf994844145948a677f6d1ecf301622da671 — `npm run check` 
+green: 47 new tests in tests/keys.test.ts, 54 total) )
 ```
 
 ### P1.2 SM-2 kernel — `src/worker/srs.ts`
@@ -119,9 +119,9 @@ never via the column's `datetime('now')` default, so lexicographic
 `Math.round(interval × 864e5)` ms — sub-ms float dust after shaky's
 ×1.2 must not leak into stored ISO text; (4) shaky never bumps
 `reps` (§1 gives reps only to `correct`); fractional intervals are
-REAL and feed the mature formula (3.6 × 2.5 → 9) · commits: (not
-committed — npm run check green: 16 new tests in tests/srs.test.ts,
-70 total) )
+REAL and feed the mature formula (3.6 × 2.5 → 9) · commits: 
+(c201d55bdad2527c217b4cb5ba1e43891d7a5899 — npm run check green: 16 
+new tests in tests/srs.test.ts, 70 total) )
 ```
 
 ### P1.3 Text normalization + parity fixtures — `src/worker/normalize.ts`
@@ -169,9 +169,9 @@ so no ideographic splitting was added — every meaning yields ≥1 keyword
 seed glosses yield 13 single-char keywords (`i`, `a`, `b`, digits, `圓`)
 and short ones like `or`/`in`/`me` — with containment-either-way that
 loosens grading (any answer containing `i` would pass that word);
-grader-side handling is deliberately out of P1.3's scope · commits: (not
-committed — npm run check green: 52 new tests in tests/normalize.test.ts,
-122 total) )
+grader-side handling is deliberately out of P1.3's scope · commits: 
+(8ea522fe2b79c96d403b9cfdba0599dfbaff0607 — npm run check green: 52 new 
+tests in tests/normalize.test.ts, 122 total) )
 ```
 
 ### P1.4 Grading rules — `src/worker/grader.ts`
@@ -226,8 +226,8 @@ raw alternatives joined `"; "` (the §2 learning moment),
 the same pipeline `expectedKeywords` runs; `expectedKeywords`
 refactored onto it, its 52 fixtures unchanged); grader is total:
 unknown rule and empty answers grade incorrect, never throws ·
-commits: (not committed — npm run check green: 25 new tests in
-tests/grader.test.ts, 147 total) )
+commits: (fea6b558efc9fd19121ce1c2a84a040f8ce8bf6e — npm run check 
+green: 25 new tests in tests/grader.test.ts, 147 total) )
 ```
 
 ---
@@ -290,7 +290,8 @@ so prompts.ts stays DB-free and the builder passes rows straight in;
 (5) seed cross-checks: readings single-valued (0 rows with `;`/`,`),
 245 surfaces repeat across levels (harmless — prompt_key embeds the
 level), 11 kanji lack on / 285 lack kun / 0 lack both · commits: (not
-committed — npm run check green: 17 new tests in tests/prompts.test.ts,
+committed — 7b69d3bbfaf6ce71c6d0fc404eb0f96053fcdfdd - npm run check 
+green: 17 new tests in tests/prompts.test.ts,
 164 total) )
 ```
 
@@ -361,7 +362,7 @@ against remaining capacity, stopping every call after 2 draws and yielding
 (10) tests: tests/session-builder.test.ts, 10 tests in workerd against
 seeded D1 per seed.test.ts conventions, each test resets runtime tables
 first so it passes under both per-test and per-file storage isolation ·
-commits: (not committed — npm run check green: 174 total))
+commits: e438afeac4a8ef1a9fbbcbc04642f22864fcfae3
 ```
 
 ---
@@ -428,15 +429,14 @@ body is zod's error, not API.md's `{error:{code,message}}` envelope —
 `errorSchema` exists in api-types.ts for P1.8+ to normalize into. (11)
 tests: tests/api-types.test.ts, 35 tests = 14 documented-payload parses +
 10 rejections + 2 domain-wire + 9 runtime zValidator/`hc` checks;
-`npm run check` green: 209 total) · commits: (not committed — npm run
-check green: 209 total) )
+`npm run check` green: 209 total) · commits: f575c49db1ec10680e6db675287117363f4e8cea
 ```
 
 ### P1.8 `GET /api/status` (replace Phase 0 stub)
 
-- [ ] Real payload: `streak_days`, `last_session`, `due_count`,
+- [x] Real payload: `streak_days`, `last_session`, `due_count`,
       `totals`, `weakest_bucket`.
-- [ ] Streak computed from `sessions` (decision D-3 below).
+- [x] Streak computed from `sessions` (decision D-3 below).
 
 **Acceptance:** tests for empty DB (first run), single session, and
 multi-day streak; `due_count` matches the builder's due query;
@@ -446,7 +446,38 @@ shared helpers, not a second implementation).
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided: (1) structure — payload composition lives in
+a new `src/worker/status.ts` (`statusPayload(db, now)`), so index.ts stays
+route-registration-only and `now` is injectable (srs.ts / session-builder.ts
+convention); the route injects `new Date()`. (2) Shared helpers, never a
+second copy (Notes requirement above): `streakDays`, `dueCount`,
+`bucketAccuracies` + `weakestBucket` are imported from session-builder.ts,
+and the acceptance's parity bullets are asserted by comparing the served
+body against those helpers' own output. (3) Status-only queries:
+`last_session` = MAX(completed_at) over COMPLETED sessions (abandoned rows
+keep NULL per DATA-MODEL "Retention & integrity" and never show as
+activity — matches API.md's first-run note), `totals` = one scalar-subquery
+row over vocabulary/kanji/passages (8334/2091/0; passages stays 0 until
+Phase 3, D-2), live counts not seed constants. (4) GET has no request body,
+so no zValidator: typing comes from `c.json<StatusResponse>`; the error path
+returns API.md's envelope (errorSchema) with code `internal_error`, making
+the client's decoded union `StatusResponse | {error: ApiError}` — pinned by
+an `Equal` assertion (apparently the first production route on AppType; the
+Phase 0 stub's `{ok}` shape is gone). (5) The 500 branch is type-checked
+but not exercised at runtime — no way to force a D1 failure through the
+public route. (6) Inherited caveat: `weakest_bucket` runs through
+`bucketAccuracies`, which predates D-1's `kind_hint` column (P1.10 adds
+`AND kind_hint IS NULL`) — status inherits that filter by construction;
+flagged, not fixed. (7) Streak/due fixtures are built relative to
+`Date.now()` because the handler owns its clock; coverage: empty DB first
+run, single completed session + ignored abandoned row, 3-day consecutive
+run, already-broken gap run (0), yesterday-still-counts (D-3), 3 due rows
+vs suspended/future excluded, weakest-bucket parity, and one end-to-end
+`hc<AppType>` call with a custom fetch back into the real app. (8) Live
+smoke: `npm run dev` + `curl /api/status` served the API.md first-run body
+verbatim. (9) tests: tests/status.test.ts, 8 tests in workerd against
+seeded D1 per session-builder.test.ts conventions (seed once, runtime
+tables wiped per test) · commits: 81948042e7233391dc3367708fa13d100d5dc645
 ```
 
 ### P1.9 `POST /api/session/start`
