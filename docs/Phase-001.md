@@ -602,15 +602,15 @@ item while non-duplicates still land.
     grading reads a hand-built 4-prompt snapshot fixture, so grades and
     SM-2 expectations are exact. Heads-up for fixtures: the production
     prompt_key is `w:jlpt:n3:合図:produce` (5 segments).
-commits: )
+commits: 34ec760a044cb0c981a3f213d9f7674e8d02839d)
 ```
 
 ### P1.11 `POST /api/session/complete`
 
-- [ ] Finalizes the session row (`completed_at`, `duration_sec`,
+- [x] Finalizes the session row (`completed_at`, `duration_sec`,
       `stats` JSON per DATA-MODEL "Session stats").
-- [ ] Response `summary`: reviews/new done+correct counts, streak.
-- [ ] `next_session.preview` + `note` derived from a **real builder
+- [x] Response `summary`: reviews/new done+correct counts, streak.
+- [x] `next_session.preview` + `note` derived from a **real builder
       projection** ("8 reviews · 3 new (kanji readings)" — no
       passage line in v1).
 
@@ -622,7 +622,69 @@ is idempotent (no stat inflation).
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided:
+(1) idempotency: the FIRST completion writes completed_at /
+    duration_sec / stats once, via `UPDATE … WHERE completed_at IS NULL`
+    (a racing replay loses the guard with 0 rows changed). The response
+    body is RECOMPUTED on every call — counts derive from `responses`
+    rows (derived data, never incremented), so no stat can inflate, and
+    answers landing after completion (Phase 2's queue flushing) surface
+    on the next call (UX.md: "the summary reflects everything once
+    synced"). A replay with a different duration_sec sticks nothing.
+(2) summary split: the STORED snapshot's `is_new` sides the responses
+    joined on prompt_key. Fast-skip rows (D-1) count as DONE (the reason
+    D-1 writes the row), never as correct (grade NULL), and never in
+    stats accuracy (`kind_hint IS NULL` again, §3). prompt_keys outside
+    the snapshot are ignored — defensive only, P1.10 rejects them at
+    write time.
+(3) streak via the shared `streakDays`, called AFTER the completion
+    write so today counts (D-3); projection reuses `buildSession` +
+    `bucketAccuracies`/`weakestBucket` — single implementation, no
+    second copy (P1.8/P1.9 precedent).
+(4) next_session.preview = a real projection: `buildSession(db, now)`
+    re-run READ-ONLY against the post-session state (completion writes
+    no SRS row), formatted `<N> reviews · <M> new (<bucketLabel>)`;
+    zero segments omitted, `1 review` singularized (copy fix found by
+    the live smoke — "1 reviews"), no passage line (D-2). The label is
+    a new `bucketLabel()` export from session-builder, so builder and
+    preview can never word a bucket differently; a mixed-bucket draw
+    (only reachable via partial bucket exhaustion) drops the
+    parenthetical.
+(5) next_session.note = hybrid (user decision): full per-bucket
+    WEAKNESS_SENTENCES when the projected draw is exactly the measured
+    weakest bucket (so the sentence is true of what start will serve),
+    otherwise the projection's own `adaptation_note`, whose templates
+    already word the divergent cases (no history / reading weakest but
+    passages later / bank exhaustion). Sentences are written per bucket
+    rather than composed from labels — grammar differs ("…readings
+    are" vs "…comprehension is").
+(6) stats JSON per DATA-MODEL: `counts` as served (reviews/new only in
+    v1 — reading/writing prompts don't exist, D-2), session-scoped
+    `accuracy` over graded rows only (the 7-day rolling accuracy stays
+    builder/status-owned), `buckets_practiced` in BUCKETS order. Written
+    once at completion; audit-only — no route reads it back.
+(7) errors: unknown session_uuid → InvalidRequestError → 400
+    invalid_request BEFORE any write — the class is imported from
+    responses.ts (one shared error type, not a second copy); schema
+    failures go through the same zValidator hook as P1.9/P1.10; a
+    corrupt stored snapshot surfaces as 500 (P1.9 precedent).
+(8) tests: tests/session-complete.test.ts (9 tests, workerd, seeded D1
+    per session-start.test.ts conventions): summary math against known
+    fixture rows (fast-skip in done/not correct; stats accuracy 0.5 over
+    4 graded rows), first-run adaptation_note fallback, preview ≡ a real
+    follow-up session/start (counts + label, acceptance b), replay ≡
+    original with duration 999 not sticking and rows unchanged at
+    1 session / 0 responses (acceptance c), D-3 streak across a
+    prior-day completion, both 400 paths (unknown uuid → no row; missing
+    duration_sec → session left uncompleted), one end-to-end
+    `hc<AppType>` call, compile-time Equal assertions (request =
+    SessionCompleteRequest, client view = SessionCompleteResponse |
+    {error}); `npm run check` green: 241 total (+9) · live smoke:
+    `npm run dev` + script — start → responses (graded incorrect) →
+    complete → preview `1 review · 3 new (word meanings & readings)`
+    ≡ next start's real 1+3 composition with matching label, replay
+    byte-identical, unknown uuid → 400 invalid_request envelope.
+commits: )
 ```
 
 ---

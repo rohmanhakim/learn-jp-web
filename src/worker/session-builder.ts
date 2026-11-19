@@ -70,6 +70,15 @@ const BUCKET_LABELS: Record<Bucket, string> = {
   writing: "sentence production",
 };
 
+/**
+ * Human label for a bucket (e.g. `kanji readings`). Exported for P1.11's
+ * `next_session.preview`, which must word the drawn bucket exactly as
+ * this module does — one source for the label, never a second copy.
+ */
+export function bucketLabel(bucket: Bucket): string {
+  return BUCKET_LABELS[bucket];
+}
+
 /** One passage as it would appear in the snapshot (API.md `passages`). */
 export interface PassageSnapshot {
   key: string;

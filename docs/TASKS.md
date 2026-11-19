@@ -55,7 +55,7 @@ Recall prompts only — the loop itself must exist before content depth.
       portability risk flagged in D11)
 - [x] Session builder v1: due reviews + 3 new items (no content piece
       yet) + `adaptation_note`
-- [ ] Endpoints: `POST /api/session/start`, `POST /api/responses`
+- [x] Endpoints: `POST /api/session/start`, `POST /api/responses`
       (batch, UUID-idempotent), `POST /api/session/complete`,
       `GET /api/status`
 - [x] Shared API contract: export Hono `AppType`; the PWA consumes it

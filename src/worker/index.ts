@@ -3,19 +3,24 @@ import { Hono } from "hono";
 import {
   type ResponsesRequest,
   type ResponsesResponse,
+  type SessionCompleteRequest,
+  type SessionCompleteResponse,
   type SessionStartRequest,
   type SessionStartResponse,
   type StatusResponse,
   responsesRequestSchema,
+  sessionCompleteRequestSchema,
   sessionStartRequestSchema,
 } from "./api-types";
 import { InvalidRequestError, saveResponses } from "./responses";
+import { completeSession } from "./session-complete";
 import { startSession } from "./session-start";
 import { statusPayload } from "./status";
 
 // The worker serves the SPA shell (via static assets) plus the REST API
-// (API.md). P1.8 lands `GET /api/status`, P1.9 `POST /api/session/start`,
-// P1.10 `POST /api/responses`; P1.11 adds the last route.
+// (API.md). P1.8 landed `GET /api/status`, P1.9 `POST /api/session/start`,
+// P1.10 `POST /api/responses`, P1.11 `POST /api/session/complete` — all
+// four routes API.md defines.
 //
 // P1.7: routes are registered by CHAINING off the constructor — that
 // is what puts them into `typeof app` and therefore into `AppType`
@@ -25,8 +30,8 @@ import { statusPayload } from "./status";
 // P1.9: `POST /api/session/start` carries `zValidator("json",
 // sessionStartRequestSchema)` on the way in and a typed payload on the
 // way out, so its request/response types are compile-time checked on the
-// client (DECISIONS D11). P1.10's route below extends the chain the
-// same way; P1.11 will too.
+// client (DECISIONS D11). P1.10's and P1.11's routes below extend the
+// chain the same way.
 // `GET /api/status` has no request body to validate — its typing comes
 // from `c.json<StatusResponse>` below, and tests parse the served body
 // with `statusResponseSchema` at runtime.
@@ -97,6 +102,30 @@ const app = new Hono<{ Bindings: Cloudflare.Env }>().get(
         return c.json({ error: { code: "invalid_request", message: err.message } }, 400);
       }
       const message = err instanceof Error ? err.message : "responses unavailable";
+      return c.json({ error: { code: "internal_error", message } }, 500);
+    }
+  },
+).post(
+  "/api/session/complete",
+  zValidator("json", sessionCompleteRequestSchema, (result, c) => {
+    if (result.success) return;
+    const detail = result.error.issues
+      .map((issue) => `${issue.path.join(".") || "body"}: ${issue.message}`)
+      .join("; ");
+    return c.json({ error: { code: "invalid_request", message: detail } }, 400);
+  }),
+  async (c) => {
+    try {
+      const request: SessionCompleteRequest = c.req.valid("json");
+      const payload: SessionCompleteResponse = await completeSession(c.env.DB, new Date(), request);
+      return c.json<SessionCompleteResponse>(payload);
+    } catch (err) {
+      // Contract violation the client must see (unknown session_uuid) —
+      // the payload module throws InvalidRequestError for exactly that.
+      if (err instanceof InvalidRequestError) {
+        return c.json({ error: { code: "invalid_request", message: err.message } }, 400);
+      }
+      const message = err instanceof Error ? err.message : "session complete unavailable";
       return c.json({ error: { code: "internal_error", message } }, 500);
     }
   },
