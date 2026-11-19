@@ -693,11 +693,11 @@ commits: )
 
 ### P1.12 App shell + API client + Home
 
-- [ ] Minimal view switching Home → Session → Done (no router
+- [x] Minimal view switching Home → Session → Done (no router
       library; UX has exactly three screens).
-- [ ] `hc<AppType>` client module — the only place the app talks to
+- [x] `hc<AppType>` client module — the only place the app talks to
       the API.
-- [ ] Home per UX.md: streak, "Last: …", single **Start session**
+- [x] Home per UX.md: streak, "Last: …", single **Start session**
       CTA; loading replaces the CTA label ("Preparing…"), never a
       spinner-only screen. (Offline CTA states are Phase 2.)
 
@@ -708,7 +708,45 @@ between open and the first prompt (UX hard rule).
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided:
+(1) "Last:" line — status.last_session is a timestamp only, so UX.md's
+    "· 12 min" clause has no contract data: Home shows the relative day
+    alone ("Last: yesterday") on D-3's UTC calendar-day basis.
+    Extending the status payload with a duration was rejected (API.md +
+    contract + status-test churn for a "glanceable, not interactive"
+    line) — revisit only if it ever reads wrong.
+(2) structure — src/client/api.ts is the ONLY API touchpoint
+    (hc<AppType>(""), same-origin): fetchStatus + startSession unwrap
+    API.md's {error:{code,message}} envelope into a thrown ApiError, so
+    each screen handles failure with one try/catch. AppType and the
+    contract types are type-only imports (verbatimModuleSyntax erases
+    them) — no worker runtime code enters the client bundle; only
+    hono/client ships. The `Contract | {error}` casts are safe because
+    tests/*.test.ts already pin all four client views to the contract
+    with Equal assertions.
+(3) shell — App.svelte owns one view rune (home | session | done, no
+    router per the plan) plus the session snapshot; Home owns the
+    status fetch and the CTA; Session.svelte and the Done branch are
+    placeholders P1.13/P1.14 fully replace (the Session stub renders
+    only title, 1/N, first stimulus/instruction so the ≤5 s acceptance
+    can land on prompt 1 — its "reload to return home" hint is
+    temporary and leaves with the stub).
+(4) CTA rules — status loads in the background so the CTA never waits
+    on it; status failure degrades silently (no streak/Last lines, CTA
+    live); while start is in flight the label becomes "Preparing…"
+    (UX.md: never a spinner-only screen); start failure shows one
+    muted aria-live line under the CTA. Offline CTA states are
+    deliberately absent (Phase 2).
+(5) verification — `npm run check` green (241 total) and `npm run
+    build` clean; live smoke against `npm run dev`: GET / → 200,
+    GET /api/status served the contract body, POST session/start
+    returned the snapshot, same-uuid replay byte-identical, bad uuid →
+    400 invalid_request envelope (surfaced by the UI as the muted CTA
+    error line). tsc does not look inside .svelte files (Phase 0's
+    minimal toolchain) — the components are covered by the vite build
+    plus this manual pass; the eyeball check of tap → prompt 1 ≤ 5 s
+    in a desktop browser is the one manual acceptance step.
+commits: )
 ```
 
 ### P1.13 Session screen
