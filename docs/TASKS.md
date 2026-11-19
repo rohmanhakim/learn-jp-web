@@ -58,7 +58,7 @@ Recall prompts only — the loop itself must exist before content depth.
 - [ ] Endpoints: `POST /api/session/start`, `POST /api/responses`
       (batch, UUID-idempotent), `POST /api/session/complete`,
       `GET /api/status`
-- [ ] Shared API contract: export Hono `AppType`; the PWA consumes it
+- [x] Shared API contract: export Hono `AppType`; the PWA consumes it
       via `hono/client` (`hc<AppType>`) so request/response types are
       compile-time checked on both ends
 - [ ] Frontend: Home / Session / Done per UX.md (recall + production

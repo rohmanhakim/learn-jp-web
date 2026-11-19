@@ -370,10 +370,10 @@ commits: (not committed — npm run check green: 174 total))
 
 ### P1.7 Shared API contract — `src/worker/api-types.ts`
 
-- [ ] Zod schemas for every request/response in API.md (status,
+- [x] Zod schemas for every request/response in API.md (status,
       session/start, responses batch + per-item results,
       session/complete), built with `@hono/zod-validator`.
-- [ ] Export `AppType` from the Hono app; PWA consumes it via
+- [x] Export `AppType` from the Hono app; PWA consumes it via
       `hc<AppType>`.
 
 **Acceptance:** `npm run typecheck` proves request/response types
@@ -384,7 +384,52 @@ hand-written interfaces on the client.
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided: (1) structure — schemas-first: api-types.ts
+exports Zod schemas + inferred types for all four endpoints now, while
+production routes stay unimplemented (P1.8–P1.11 own them); P1.7's
+both-ends proof is a demo app built INSIDE tests/api-types.test.ts
+(`zValidator` on all four routes, handlers returning the documented
+payloads, consumed via `hc<typeof demoApp>`), so no stub handlers ship in
+src/. (2) `export type AppType = typeof app` in index.ts — but routes must
+be registered by CHAINING off the constructor: Phase 0's separate
+`app.get(...)` statement left `typeof app` at hono's empty `BlankSchema`,
+which made `hc<AppType>` resolve to `unknown`; the stub was rewritten as a
+chained `.get()` and the requirement is documented in index.ts's header for
+P1.8–P1.11. (3) enums derived, never re-spelled (D-9): grades/buckets/
+prompt kinds from keys.ts, `input` from prompts.ts's PROMPT_INPUTS,
+grading rules mirror GradingSpec; type assertions pin
+`Equal<GradingSpec, GradingSpecWire>`, `Prompt extends PromptWire`,
+`SessionSnapshot extends SessionSnapshotWire`. (4) wire optionality:
+`is_new`/`stimulus`/`grading` are optional because API.md's passage
+example omits them (passage questions grade by answer_index) — every v1
+prompt sends all three; `passages[].level` stays a plain `string` to stay
+assignable from the builder type until Phase 3 narrows it to LEVELS. (5)
+response items are a 3-way union keyed by `kind_hint`: graded forbids it
+(`z.undefined()` rejects the string), fast_skip (P1.15) and unknown_word
+(D-5) require it; `self_grade` is required-but-nullable on graded items
+(P1.4's note) and absent on the other two, `answer` optional on fast-skip
+(one tap, nothing typed). (6) per-item results gained `correct_answer` +
+`checks` — UX.md's learning moment and ✓/✗ line read them off the batch
+response — and `interval_days` is non-negative but NOT integer, because
+the shaky path yields e.g. 3.6 (§1); API.md amended in the same change.
+(7) `session_uuid` is required in session/start: `sessions.client_uuid` is
+`NOT NULL UNIQUE -- idempotency key from client` (DATA-MODEL); API.md's
+"optional hints" line clarified to mean `max_minutes`. (8) API.md
+amendments in this change: `fast_skip_available` on session/start,
+`correct_answer`/`checks` on results, a documented fast-skip request
+variant + the kind_hint exclusivity rule, first-run (`null`s) and
+Phase-3 (`totals.passages`, `summary.reading/writing`) annotations, and
+"preview must match what start serves". (9) `AppType` covers only the
+Phase 0 stub until P1.8–P1.11 attach `zValidator` to each route — the
+test's demo app proves full four-route inference today, and the
+`SuccessJson` helper strips zValidator's own 400 (`ZodSafeParseError`)
+branch that hono also hands the client. (10) zValidator's default failure
+body is zod's error, not API.md's `{error:{code,message}}` envelope —
+`errorSchema` exists in api-types.ts for P1.8+ to normalize into. (11)
+tests: tests/api-types.test.ts, 35 tests = 14 documented-payload parses +
+10 rejections + 2 domain-wire + 9 runtime zValidator/`hc` checks;
+`npm run check` green: 209 total) · commits: (not committed — npm run
+check green: 209 total) )
 ```
 
 ### P1.8 `GET /api/status` (replace Phase 0 stub)
