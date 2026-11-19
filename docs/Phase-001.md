@@ -751,11 +751,11 @@ commits: )
 
 ### P1.13 Session screen
 
-- [ ] One prompt at a time; slim header `n/total · progress · ✕`
+- [x] One prompt at a time; slim header `n/total · progress · ✕`
       (exit = confirm → partial session saved → Done-lite).
-- [ ] Recall: text input, ⏎ submit → inline verdict ~1.2 s → next;
+- [x] Recall: text input, ⏎ submit → inline verdict ~1.2 s → next;
       **wrong shows the correct answer** inline.
-- [ ] Production: textarea + self-grade `✓ solid / ~ shaky / ✗ wrong`
+- [x] Production: textarea + self-grade `✓ solid / ~ shaky / ✗ wrong`
       appearing only after submit; desktop shortcuts `1/2/3`;
       deterministic check feedback (`✓ contains 合図`) shows
       regardless of self-grade.
@@ -821,14 +821,55 @@ block on showing the next prompt.
     eyeball walkthrough against UX.md's mockups (recall + production +
     exit mid-session + ≤5 s tap-to-first-prompt) — the three checkboxes
     stay unticked until that pass.
-commits: )
+(7) reachability finding (2026-11-19) — production prompts (the ONLY
+    kind carrying the self-grade row) cannot occur in a normal run: the
+    builder draws weakest-bucket-first then fallback
+    `vocab_recog → kanji → writing`, each bucket filling all 3 new
+    slots, while `weakestBucket` skips neutral buckets (no graded rows
+    in 7d). Only vocab_recog ever accumulates rows — it draws first and
+    reviews are its recall prompts — so kanji/writing stay neutral
+    forever and are never drawn. Chicken-and-egg: self-grade UI is
+    built but unreachable through play (the §4 rule-3 content-piece
+    writing prompt is Phase 4; D-2 skips content in v1). DECISION:
+    accept for Phase 1 (option 1); changing the draw rule would amend
+    LEARNING-DESIGN §4/§5 + this plan together — deferred as an
+    explicit product decision (see the general Notes bullet).
+(8) production verified by FORCING writing weakest on local D1 —
+    `INSERT INTO responses (session_id, client_uuid, prompt_key,
+    item_key, answer, grade, self_grade, bucket) SELECT id,
+    lower(hex(randomblob(16))), 'w:jlpt:n5:合図:produce',
+    'vocab:jlpt:n5:合図:produce', 'x', 'incorrect', 'wrong', 'writing'
+    FROM sessions ORDER BY id DESC LIMIT 3;` (remove with `DELETE FROM
+    responses WHERE bucket='writing' AND kind_hint IS NULL;` — these 3
+    rows are still in the local dev DB so the browser walkthrough can
+    see the production UI). Results: status.weakest_bucket → writing;
+    session/start → 4 due recall + 3 production prompts
+    (`Write a sentence using 鉛筆 (pencil)`, input=text+selfgrade,
+    rule=production, must_contain=[surface]); contract round-trip:
+    token present + solid → grade correct, checks [{鉛筆,true}], srs
+    1d; token absent + shaky → grade incorrect, checks [{時間,false}]
+    (checks dominate the self-grade, per §2's merge); production rows
+    re-enter the next session as due reviews (interval 0) with the
+    `review · writing` chip. Session.svelte SSR render with a
+    production snapshot prints `1/1 ✕ · review · writing · Write a
+    sentence using 鉛筆 (pencil) · <textarea>` and correctly NO
+    self-grade row while phase=answering — the ✓/✗ row needs the submit
+    tap and is therefore the one part still owed to the human browser
+    pass in (6).
+(9) walkthrough PASSED 2026-11-19 (user, desktop browser) — recall
+    inline verdict, production submit → checks line → self-grade row +
+    1/2/3 shortcuts → verdict, ✕ mid-session → partial counts on Done,
+    last prompt → Done directly (never via Home), preview ≡ the next
+    start's composition, ≤5 s tap-to-first-prompt. All three boxes
+    ticked; TASKS.md's Frontend bullet ticked alongside.
+commits: 6d65d99, 86ea4c7 )
 ```
 
 ### P1.14 Done screen
 
-- [ ] Summary counts, streak, `next_session.preview` + adaptation
+- [x] Summary counts, streak, `next_session.preview` + adaptation
       note, single **Done** button → Home.
-- [ ] After the last prompt, the Session screen is replaced by Done —
+- [x] After the last prompt, the Session screen is replaced by Done —
       never routed back through Home in between.
 
 **Acceptance:** manual — Done reflects the completed session's real
@@ -838,7 +879,54 @@ next `session/start` actually serves.
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-19 · decided:
+(1) structure — new src/client/Done.svelte (props: `completed:
+    SessionCompleteResponse | null`, `ondone`); App.svelte's done branch
+    is now one <Done> element and the Done-lite markup/styles are gone
+    (App keeps only the :global(body) rules it shares with every view).
+    No new api.ts call — `completeSession` exists since P1.13 and the
+    payload already reaches App as `completed`.
+(2) data — EXACTLY the /session/complete payload: counts are the
+    server's `responses`-row projection (so a mid-session exit counts,
+    P1.13 decision 2) and preview/note are P1.11's real projection —
+    zero client-side math, no second fetch, no placeholders.
+(3) rows — `correct/done` per the mockup ("reviews 8/9", "new words
+    2/3"); `reading` ("3/3 + 2 saved") and `writing` ("solid") render
+    ONLY when their optional summary fields arrive, so Phases 3–4 light
+    up with zero edits. Streak line shows only when > 0 (Home's rule;
+    the mockup's 🔥 5-day is the >0 case).
+(4) degraded case — `completed === null` (complete call failed) renders
+    heading + one muted aria-live line + the Done button: no invented
+    numbers, no Next block (neither exists without the payload).
+(5) verification — `npm run check` green (lint + wrangler types --check
+    + tsc + 241 tests) and `vite build` clean. Live API smoke against
+    `npm run dev`: status → start (4 prompts) → responses (grade
+    correct, srs interval 1d) → complete → summary {reviews 1/1,
+    streak 1} + preview "3 new (word meanings & readings)" ≡ the
+    follow-up session/start composition (0 reviews — a zero segment is
+    omitted by P1.11's format rule). Component markup verified WITHOUT a
+    browser (none available in this environment) by rendering
+    Done.svelte through vite SSR + `svelte/server`: real payload prints
+    exactly the UX.md mockup lines (Session complete · reviews 8/9 ·
+    new words 2/3 · 🔥 5-day streak · Next: … · note · Done), a Phase
+    3/4 payload adds the reading/writing rows and hides a 0-day streak,
+    and the null payload contains no digits and no Next line. Drive-by
+    fix: App.svelte's contract import pointed at ./worker/api-types
+    (nonexistent from src/client — it only survived because the import
+    is type-only and erased; tsc does not read .svelte files) →
+    ../worker/api-types, matching Session.svelte.
+NOT yet done: the human browser walkthrough — Done must be eyeballed
+against the UX.md mockup with a real session, TOGETHER with P1.13's
+still-outstanding recall/production/exit pass (both checkboxes stay
+[~] until then). TASKS.md's "Done screen shows next_session.preview"
+bullet stays unticked for the same reason.
+(6) walkthrough PASSED 2026-11-19 (user, desktop browser) — real
+    counts/streak/preview/note on Done after both the last-prompt and
+    the exit path, Next line ≡ the following session/start's actual
+    composition, single Done button back to a refreshed Home.
+    TASKS.md's "Done screen shows next_session.preview" bullet ticked
+    with it. Both checkboxes above are [x].
+commits: 920584e )
 ```
 
 ### P1.15 First-run fast-skip UI ("I know this")
@@ -1000,6 +1088,16 @@ updating this file together with the affected design docs, per
 - Anti-requirements (LEARNING-DESIGN §9) apply verbatim to every
   sub-task here: no start/end ceremony, no config UI, no
   multiple-choice recall, no LLM in the prompt-serving path.
+- **Open product decision (found 2026-11-19, P1.13 Notes 7):**
+  production / self-grade prompts are unreachable in normal play —
+  `weakestBucket` skips neutral buckets, so `writing` (and `kanji`)
+  can never be drawn first, and `vocab_recog` fills all 3 new-item
+  slots. Phase 1 accepts this; making production practice appear
+  without history would need a draw-rule change (rotation, or neutral
+  buckets eligible), which must amend LEARNING-DESIGN §4/§5 and this
+  plan together. Until then the self-grade UI is exercised only by
+  forcing `writing` weakest (P1.13 Notes 8) or arrives with Phase 4's
+  content-piece writing prompt (§4 rule 3).
 - Suggested first session: **P1.1 + P1.2** — the most self-contained
   slice (types + SM-2 kernel with its full grade-path test table).
 - This file does not modify [TASKS.md](TASKS.md); when a sub-task

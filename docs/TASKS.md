@@ -61,11 +61,11 @@ Recall prompts only — the loop itself must exist before content depth.
 - [x] Shared API contract: export Hono `AppType`; the PWA consumes it
       via `hono/client` (`hc<AppType>`) so request/response types are
       compile-time checked on both ends
-- [ ] Frontend: Home / Session / Done per UX.md (recall + production
+- [x] Frontend: Home / Session / Done per UX.md (recall + production
       with self-grade)
 - [ ] First-run fast-skip ("I know this") flow
 - [ ] Sessions + responses persisted; streak computed from `sessions`
-- [ ] Done screen shows `next_session.preview` derived from real data
+- [x] Done screen shows `next_session.preview` derived from real data
 
 **Acceptance:** complete the product-level definition of done against
 the local dev server, desktop browser. No external services, no third-party
