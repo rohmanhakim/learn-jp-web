@@ -999,17 +999,17 @@ commits: )
 
 ### P1.16 End-to-end acceptance pass
 
-- [ ] Run the product-level definition of done against `npm run dev`
+- [x] Run the product-level definition of done against `npm run dev`
       on a desktop browser: open → one button → 10 min of graded
       prompts → saved → Done screen shows adapted preview → next
       session visibly adapted.
-- [ ] `npm run check` green (lint + `wrangler types --check` +
+- [x] `npm run check` green (lint + `wrangler types --check` +
       typecheck + tests).
-- [ ] **Measure CPU/request** (D12's Phase 1 obligation): SM-2 +
+- [x] **Measure CPU/request** (D12's Phase 1 obligation): SM-2 +
       grading should sit at 1–5 ms; record the measurement in
       Notes. If any request approaches the 10 ms Workers Free
       budget, note it before considering Workers Paid.
-- [ ] Phase 0 criteria unregressed: seed counts 8,334 / 2,091,
+- [x] Phase 0 criteria unregressed: seed counts 8,334 / 2,091,
       `npm run seed && npm run dev` works, build/deploy path intact.
 
 **Acceptance:** all boxes checked; the Phase 1 bullets in TASKS.md
@@ -1018,7 +1018,51 @@ are checked; no later-phase work started.
 **Notes (include the CPU/request measurement):**
 
 ```
-(started: · decided: · commits: · cpu/request: )
+(started: 2026-11-20 · decided: (1) clean-room via a RUNTIME-TABLE reset,
+NOT a reseed — `DELETE FROM sessions; responses; srs_state;` (content
+tables untouched, 8,334/2,091 verified by count) after P1.15's walkthrough
+left an abandoned session row, 3 suspended fast-skip items and an inflated
+session ordinal; note `npm run seed` could not have done it (upsert-only,
+zero DELETE statements), so a reseed is the wrong tool for clearing
+progress. (2) "10 min of graded prompts" is read as PHASE-1 SCOPE, not
+literal wall time: builder v1 serves 3 new + due reviews only, so one run
+is 3–5 prompts and under a minute (measured 41 s / 26 s). Duration is a
+Phase 3–4 consequence of content depth; recorded here so a later session
+does not read the short run as a miss. (3) cpu/request measured TWO ways
+because local workerd exposes no CPU timer — an in-process micro-benchmark
+of the pure domain (the CPU a Worker actually burns on SM-2 + grading; D1
+wait is I/O and excluded by definition) plus full-request wall clock
+through Vite → workerd → local SQLite as an upper bound.
+· walkthrough PASSED 2026-11-20 (user, desktop browser, localhost). Session
+1 (41 s): 0/3 new words + 1 first-run fast-skip (the P1.15 button, present
+session 1 only), Done → `Next: 2 reviews · 3 new (word meanings &
+readings)` + weakness sentence + 🔥 1-day streak. Session 2 (26 s): served
+EXACTLY 2 reviews + 3 new — the two items missed in session 1 came back as
+`review` chips — 1/2 reviews, 1/3 new, `Next: 3 reviews · 3 new`. After it
+`GET /api/status` → due_count 3 (≡ the preview), weakest_bucket
+vocab_recog (was null on first run), streak_days 1. Independent parity
+check: a scripted `session/start` returned 3 `is_new:false` + 3
+`is_new:true` prompts ≡ that Done preview, adaptation_note "New items
+focus: word meanings & readings (weakest 7d: 29%)". D1 rows back all of it:
+srs_state intervals 0 → due now, 1 → due +1d, fast-skip → +30d suspended.
+· Phase 0 unregressed: `npm run seed` → "✅ local seeded: 8334 vocabulary /
+2091 kanji, no duplicate item_ids"; `npm run build` clean (192 ms);
+`npm run check` → 241 tests / 12 files green (lint + wrangler types
+--check + tsc).
+· cleanup: the parity check's own start wrote one abandoned session row
+(no responses, never completed) — deleted again afterwards, so the local
+DB holds only the 2 walkthrough sessions and the next start ordinals as
+"Session 3".
+commits: · cpu/request: pure domain, 200k iterations — gradeAnswer 0.76–
+3.75 µs/call (keyword correct 1.40, keyword wrong 3.75, normalized_exact
+0.76, production 1.32), applyGrade 0.60–0.64 µs/call → 0.001–0.004 ms per
+call, ~3 orders of magnitude under D12's 1–5 ms expectation and nowhere
+near the 10 ms Workers Free budget. Full-request wall clock (dev, UPPER
+BOUND incl. proxy + workerd + local SQLite): status 15.4–30.3 ms (median
+21), session/start fresh 26.6 ms / replay 15.1 ms, responses batch of 3
+graded 26.3 ms, session/complete 24.4 ms. No request approaches 10 ms of
+CPU; a literal production CPU/request figure needs Workers Observability
+after a deploy (open follow-up, not a Phase 1 blocker).
 ```
 
 ## Decisions
