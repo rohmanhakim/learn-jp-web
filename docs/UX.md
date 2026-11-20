@@ -164,9 +164,19 @@ replaced by Done — never back to Home in between.
 ## Input considerations
 
 - Japanese entry uses the platform IME in a plain `<input>`/`<textarea>`
-  — no custom keypad, no kana romaji trainer in v1.
+  — no custom keypad, no candidate/IME widget (DECISIONS D14).
+- **Kana-answer fields convert romaji as you type (Phase 1.5):** the
+  reading and kanji-reading prompts (`normalized_exact`) bind a
+  transliteration layer (`wanakana`, `IMEMode: 'toHiragana'`) so a
+  device without a Japanese IME can answer `maiasa` → `まいあさ`.
+  It is invisible mechanics — no suggestions, no dictionary, no
+  toggle — and it must never run on meaning (`keyword`, English) or
+  production fields. Platform-IME composition is never interrupted
+  (no conversion mid-composition).
 - Normalization before grading happens server-side (full/half width,
-  katakana↔hiragana for readings) — the client sends raw input.
+  katakana↔hiragana for readings) — the client sends what is in the
+  field, un-normalized (the field may hold converted kana; NFKC/width
+  folding is still server-side only).
 
 ## Visual style (guidance, not mandate)
 

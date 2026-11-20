@@ -57,8 +57,11 @@ on graded response g ∈ {correct, shaky, incorrect}:
 | `passage_question` | passage + question → choice | `answer_index` equality |
 | `writing` | prompt → free text | Phase 1–4: deterministic checks (length ≥ N chars, required tokens) + self-grade, same merge as production. Phase 5: optional async LLM evaluation updates a stored quality flag — **never** blocks or retroactively changes session records |
 
-All normalization/grading happens server-side; the client sends raw
-input. When a recall answer is wrong, the correct answer is shown inline
+All normalization/grading happens server-side; the client sends the
+field's content un-normalized. (Phase 1.5 converts romaji → kana *in
+the kana-answer field* before submission — input mechanics, not
+normalization; nothing is folded client-side.) When a recall answer is
+wrong, the correct answer is shown inline
 (a learning moment, not just a score).
 
 ## 3. Buckets

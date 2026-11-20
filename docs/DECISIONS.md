@@ -196,3 +196,32 @@ the builder prefers a matching pool story and falls back to curated
 seed passages (D10 / D3); queue or provider failure leaves behavior
 byte-identical to Phase 3; words encountered in stories enter the SRS
 only through §8 capture.
+
+## D14. Kana input aid = client-side transliteration (WanaKana), never a candidate IME
+
+**Context:** reading prompts demand a kana answer; on a device without
+a Japanese IME the user can only type romaji, which `normalizeExact`
+never converts — a correct reading grades incorrect. The reference UX
+(Google Translate's romaji→kanji box) is not embeddable: the
+Transliterate API was deprecated in 2011 and `google/google-input-tools`
+is archived.
+**Rejected:** (a) an in-app candidate widget / real IME engine
+(hechima's Mozc-WASM, inputx-nihongo) — 1.5–17 MiB dictionaries,
+experimental APIs, and above all a suggestion list that turns a
+free-response recall prompt into a browsing exercise (the spoiler);
+kanji commits also cannot grade under `normalized_exact`; (b)
+dictionary converters (Kuroshiro, nyaitter-ime) — text→text,
+unmaintained/too new, no field integration; (c) server-side romaji→kana
+acceptance in `normalizeExact` — amends LEARNING-DESIGN §2 and the
+Phase-1 parity fixtures, and lets a romaji string stand as a typed
+reading; (d) binding conversion on every text field — mangles English
+meaning answers; (e) status quo — kana prompts unanswerable without an
+IME.
+**Consequences:** `wanakana` (MIT, ~6.6 kB min+gz, bundled, no
+network, zero advisories; low-churn upstream — behavior pinned by a
+fixture table) is bound only to fields whose `grading.rule ===
+"normalized_exact"`, with our own composition guard; grading, API, and
+data model are untouched; no UI, toggle, or config is added
+(LEARNING-DESIGN §9). Production answer entry stays platform-IME
+(D7 unchanged). UX.md's input considerations amended in the same
+change; working plan: Phase-001.5.md.

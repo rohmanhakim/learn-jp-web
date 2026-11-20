@@ -71,6 +71,38 @@ Recall prompts only — the loop itself must exist before content depth.
 the local dev server, desktop browser. No external services, no third-party
       integrations, no LLM.
 
+## Phase 1.5 — Romaji→kana input for kana-answer prompts (WanaKana)
+
+Client-only input aid so reading/kanji-reading prompts can be answered
+on a device without a Japanese IME. Transliteration only — no
+candidate list, no dictionary, no toggle (D14); grading, API, and
+schema untouched. Working plan: [Phase-001.5.md](Phase-001.5.md).
+
+- [ ] Dependency: `wanakana` 5.3.1 (MIT, ~6.6 kB min+gz) in
+      `package.json`, plus a fixture table pinning its behavior under
+      our options (upgrade safety — same role as D11's parity table)
+- [ ] Conversion layer (`src/client/kana-input.ts` + `Session.svelte`)
+      scoped by `grading.rule === "normalized_exact"` only — meaning
+      (`keyword`) and production fields are never bound
+- [ ] State parity: the submitted `answer` always equals the
+      displayed field value (`bind()` rewrites the DOM inside an
+      input event — see Phase-001.5.md P1.5.2)
+- [ ] Composition safety: our own `compositionstart/end` guard so a
+      platform IME is never mutated mid-composition (the library's
+      own handling is macOS-only); existing ⏎ `isComposing` guard
+      unchanged
+- [ ] Tests: romaji→kana fixture table + scoping-predicate tests over
+      the real prompt factories; `npm run check` green
+- [x] Docs sync: UX.md input considerations, LEARNING-DESIGN §2
+      clarifying sentence, DECISIONS D14 (done in the planning
+      session, before any phase code exists)
+
+**Acceptance:** without a Japanese IME, typing `maiasa` in a reading
+prompt submits `まいあさ` and grades correct; English meaning answers
+and production textareas behave exactly as Phase 1; zero network
+requests during conversion (offline-safe); `npm run check` green;
+browser walkthrough recorded in Phase-001.5.md's Notes.
+
 ## Phase 2 — Offline-first (PWA)
 
 - [ ] Service worker: precache app shell; app boots offline
@@ -200,7 +232,11 @@ manual interventions.
 
 Phase 1 before everything: the loop's existence is the product's
 existence — content can be thin at first (seed vocab covers months of
-new items). Phase 2 before reading/writing because offline tolerance is
+new items). Phase 1.5 immediately after 1 because it amends the same
+Session-screen input surface the loop shipped with: it is client-only,
+needs nothing from later phases, and should land before Phase 2
+reworks those client files (snapshot + queue). Phase 2 before
+reading/writing because offline tolerance is
 a stated requirement and retrofitting it later is the expensive path.
 Reading before writing because capture-into-queue compounds the
 vocabulary loop. Phase 5.5 after 5 because it reuses the LLM seam and
@@ -210,5 +246,6 @@ content machinery plus a queue, nothing new in the session path.
 ## Out of scope (do not add during these phases)
 
 Listening, grammar-drill banks, mock exams, deck/config UI, multi-user,
-native app, handwriting. See OVERVIEW.md non-goals and
-LEARNING-DESIGN §8 anti-requirements.
+native app, handwriting, an in-app candidate/IME widget (D14 — the
+Phase 1.5 input aid is transliteration only). See OVERVIEW.md
+non-goals and LEARNING-DESIGN §9 anti-requirements.
