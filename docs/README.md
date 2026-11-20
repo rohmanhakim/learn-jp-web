@@ -49,6 +49,13 @@ AI-assisted sessions on this repository.
 learn-jp-web/
 ├── AGENTS.md                 # working agreement for agent sessions
 ├── docs/                     # this documentation (product spec)
+│   └── Phase-00X.md          # per-phase working plans (sub-tasks,
+│                             #   acceptance, decisions — linked from TASKS.md)
+├── src/
+│   ├── client/               # Svelte 5 PWA (Home / Session / Done)
+│   └── worker/               # Hono API, SM-2, grader, session builder
+├── tests/                    # Vitest (runs in workerd via @cloudflare/vitest-plugin)
+├── scripts/                  # seed importer + dev-time tooling
 └── data/
     ├── seed/                 # canonical seed content (JSON, imported at setup)
     │   ├── vocabulary.json   # 8,334 JLPT-leveled words, readings + meanings + POS
@@ -60,8 +67,10 @@ learn-jp-web/
         └── jisho_cache.json  # dictionary lookup cache used during enrichment
 ```
 
-No application code exists yet. Implementation begins at Phase 0 of
-[TASKS.md](TASKS.md).
+Implementation follows the phase plan in [TASKS.md](TASKS.md); every
+phase with active work carries a `Phase-00X.md` working plan beside it
+(sub-tasks, acceptance, decisions — Phase-001.md, Phase-001.5.md,
+Phase-002.md).
 
 ## Glossary
 

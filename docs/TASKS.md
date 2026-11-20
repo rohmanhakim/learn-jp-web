@@ -105,8 +105,11 @@ browser walkthrough recorded in Phase-001.5.md's Notes.
 
 ## Phase 2 — Offline-first (PWA)
 
+Working plan: [Phase-002.md](Phase-002.md).
+
 - [ ] Service worker: precache app shell; app boots offline
-- [ ] IndexedDB: snapshot + answer queue (client_uuid per response)
+- [ ] IndexedDB: snapshot + answer queue (`response_uuid` per
+      response, per API.md idempotency rules)
 - [ ] Offline paths per UX.md interaction-state table (queued badges,
       resume after kill, exit-mid-session partial save)
 - [ ] Sync flush on reconnect with partial-success handling
