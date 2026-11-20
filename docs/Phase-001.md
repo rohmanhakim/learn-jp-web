@@ -477,7 +477,7 @@ vs suspended/future excluded, weakest-bucket parity, and one end-to-end
 smoke: `npm run dev` + `curl /api/status` served the API.md first-run body
 verbatim. (9) tests: tests/status.test.ts, 8 tests in workerd against
 seeded D1 per session-builder.test.ts conventions (seed once, runtime
-tables wiped per test) · commits: 81948042e7233391dc3367708fa13d100d5dc645
+tables wiped per test) · commits: 45e17dc89f1ccbca5ddda705f931bdb6a8d5d557
 ```
 
 ### P1.9 `POST /api/session/start`
@@ -537,7 +537,7 @@ both 400-envelope cases with no row written, one end-to-end
 `npm run check` green: 225 total · live smoke: `npm run dev` + curl —
 fresh start serves the API.md body, replay is byte-identical (`cmp`),
 invalid body → 400 `invalid_request`, `/api/status` unregressed ·
-commits: a0378a41fa03e69987ffc774bd44573ca05c9255)
+commits: 2aa343842f9fc463740d09506534b3d68772fca8)
 ```
 
 ### P1.10 `POST /api/responses` (batch)
@@ -684,7 +684,7 @@ is idempotent (no stat inflation).
     complete → preview `1 review · 3 new (word meanings & readings)`
     ≡ next start's real 1+3 composition with matching label, replay
     byte-identical, unknown uuid → 400 invalid_request envelope.
-commits: )
+commits: d1998311d8e3ff48ec344f51b5e7bb05004356a8)
 ```
 
 ---
@@ -746,7 +746,7 @@ between open and the first prompt (UX hard rule).
     minimal toolchain) — the components are covered by the vite build
     plus this manual pass; the eyeball check of tap → prompt 1 ≤ 5 s
     in a desktop browser is the one manual acceptance step.
-commits: )
+commits: 6d65d9994ec04ec88c30fd237b4e6343f567ee82)
 ```
 
 ### P1.13 Session screen
@@ -862,7 +862,7 @@ block on showing the next prompt.
     last prompt → Done directly (never via Home), preview ≡ the next
     start's composition, ≤5 s tap-to-first-prompt. All three boxes
     ticked; TASKS.md's Frontend bullet ticked alongside.
-commits: 6d65d99, 86ea4c7 )
+commits: 86ea4c791c25eab1ef42b3bff292f1abccea13d2 )
 ```
 
 ### P1.14 Done screen
@@ -926,7 +926,7 @@ bullet stays unticked for the same reason.
     composition, single Done button back to a refreshed Home.
     TASKS.md's "Done screen shows next_session.preview" bullet ticked
     with it. Both checkboxes above are [x].
-commits: 920584e )
+commits: bb1fa234c28eb405f1b3bebf21b05ec68dbade2b )
 ```
 
 ### P1.15 First-run fast-skip UI ("I know this")
@@ -990,7 +990,7 @@ precedent).
     through to the end of the session works, and session 2's start
     serves no button (flag false). Checkbox → [x]; TASKS.md's
     First-run fast-skip bullet ticked alongside.
-commits: )
+commits: 8e33a3a3d15523012e7fe13aed25db3e2874e87b)
 ```
 
 ---
