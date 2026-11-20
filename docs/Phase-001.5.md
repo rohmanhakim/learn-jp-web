@@ -67,7 +67,7 @@ size: one or two sessions (P1.5.1 + P1.5.2 together first).
 
 ## P1.5.1 Dependency: `wanakana` pinned — `package.json`
 
-- [ ] Add `wanakana` (5.3.1, MIT) to `dependencies` — the repo's first
+- [x] Add `wanakana` (5.3.1, MIT) to `dependencies` — the repo's first
       client runtime dependency. Evaluated facts (researched
       2026-11-20, full survey in the Appendix):
       - ~6.6 kB minified+gzipped, ESM build (`esm/index.js`) plus
@@ -79,7 +79,7 @@ size: one or two sessions (P1.5.1 + P1.5.2 together first).
         change what grades.
       - The pure `toKana`/`toHiragana` path touches no DOM globals;
         `bind()`/`unbind()` are the DOM helpers.
-- [ ] Confirm `npm run check` still green after the install and that
+- [x] Confirm `npm run check` still green after the install and that
       `tsc --noEmit` resolves the library's types.
 
 **Acceptance:** `npm install` succeeds; `npm run check` green; the
@@ -89,15 +89,44 @@ and after `npm run build`).
 **Notes:**
 
 ```
-
-
+(executed 2026-11-20 — dependency + verification only, no app code;
+run together with P1.5.2 as this file suggested.)
+• `npm install wanakana@5.3.1` OK — package.json pins EXACT "5.3.1"
+  (npm defaults to ^5.3.1; edited down to match the "pinned" heading;
+  lockfile records 5.3.1 + sha512 integrity). First client runtime
+  dependency, in `dependencies`.
+• Shipped types confirmed (`types: cjs/index.d.ts`; bind/unbind/toKana
+  exported). Gotcha: `DefaultOptions` is NOT exported — derive the
+  options type via `NonNullable<Parameters<typeof bind>[1]>` (what
+  kana-input.ts does). Type resolution proven with a throwaway
+  `tsc --strict --ignoreConfig` probe importing real symbols, deleted
+  after success (TS 6 requires --ignoreConfig when files are given on
+  the command line).
+• `npm run check` green after install (lint + wrangler types --check +
+  tsc + 241 Vitest tests). npm audit: no advisories over wanakana's
+  tree (dequal, memoize-one).
+• Library source facts verified in esm/index.js (inputs to D-4):
+  bind() idempotent via data-wanakana-id; unbind() THROWS with no
+  registered listener; input handler has NO isComposing check, honors
+  dataset.ignoreComposition === "true"; the library's own composition
+  handler is macOS-only; bind() also sets lang=ja/autocapitalize/
+  spellcheck, restored by unbind().
+• Bundle delta, honestly recorded: 0 B at install time (nothing
+  imports the package yet — Vite tree-shakes it; client output dir is
+  dist/client/assets, not dist/assets). The single-digit-kb criterion
+  is therefore evaluated where the import lands, in P1.5.2: 55,845 →
+  69,808 B raw (+13.96 kB raw — the kana tables are the bulk) with
+  gzip 21.11 → 26.62 kB (+5.51 kB — single-digit on the min+gz basis
+  bundlephobia quotes, which its ~6.6 kB figure also uses).
+• TASKS.md Phase 1.5 bullet 1 deliberately left unticked: it also
+  covers the P1.5.3 fixture table.
 ```
 
 ---
 
 ## P1.5.2 Conversion layer — `src/client/kana-input.ts` + `src/client/Session.svelte`
 
-- [ ] New pure module `src/client/kana-input.ts` (repo pattern: pure
+- [x] New pure module `src/client/kana-input.ts` (repo pattern: pure
       logic in its own module, imported by client code and tests):
       - `isKanaAnswerPrompt(prompt)` → `prompt.grading.rule ===
         "normalized_exact"`. The **rule** is the only field that
@@ -112,7 +141,7 @@ and after `npm run build`).
         `unbindKanaInput(el)` — **must check that attribute first**:
         the library's `unbind()` *throws* when no listener is
         registered.
-- [ ] `Session.svelte` wiring (the `<input>` branch only — the
+- [x] `Session.svelte` wiring (the `<input>` branch only — the
       production `<textarea>` is never bound):
       - one `$effect` keyed on the current prompt: bind when
         `fieldEl` is the input and `isKanaAnswerPrompt(prompt)`;
@@ -158,15 +187,59 @@ listeners across prompts; `npm run check` green.
 **Notes:**
 
 ```
-
-
+(executed 2026-11-20, together with P1.5.1 as suggested above.)
+• kana-input.ts as specified. isKanaAnswerPrompt checks
+  `prompt.grading?.rule === "normalized_exact"` — optional-chained
+  because PromptWire.grading is optional (API.md's passage prompt has
+  none; a spec-less prompt is simply never bound). KANA_INPUT_OPTIONS
+  typed `NonNullable<Parameters<typeof bind>[1]>` (the library exports
+  no options type — see P1.5.1 Notes).
+• Deviation (location only): the compositionstart/end guard handlers
+  live in kana-input.ts as module-level functions rather than in
+  Session.svelte — same attribute contract per D-4, but bind/unbind
+  stay a single call pair, same-reference removal is exact, and
+  duplicate adds are DOM no-ops. unbindKanaInput checks
+  data-wanakana-id first (unbind() throws otherwise — verified).
+• Session.svelte: ONE $effect keyed on fieldEl + prompt; binds only
+  when fieldEl instanceof HTMLInputElement AND isKanaAnswerPrompt —
+  production textarea and meaning inputs never bound. The effect does
+  not read `phase`, so readonly toggling across verdict windows never
+  churns bind/unbind. Sync listeners (input + compositionend) attached
+  AFTER bindKanaInput → attachment order Svelte bind:value → library →
+  sync, giving the parity invariant `answer === element.value` at all
+  times after conversion. Cleanup unbinds on prompt advance/rule
+  change; no-op re-renders while bound (bind() idempotent).
+• Listener-order fallback (drive field via value+oninput) NOT needed:
+  verified against svelte@5.57.3's bind_value source — its post-tick
+  re-write restores selectionStart/End around any write, and the
+  render-effect write is equality-guarded (`value !== input.value`)
+  and batch-skipped while the input is focused, so converted kana can
+  never be clobbered back to romaji. Real-browser POST-body assertion
+  still owed by P1.5.4.
+• Untouched: ⏎ isComposing guard in onFieldKeydown; markup (still
+  bind:value); zero UI chrome (D-5); server/API/schema/grading. Paste
+  fires input → converts (accepted per plan).
+• Verification: npm run check green (lint + wrangler types + tsc +
+  241 tests); tsx smoke through the REAL module: maiasa → まいあさ
+  (the phase acceptance example), toukyou → とうきょう, MAIASA →
+  まいあさ (D-3 uppercase→hiragana), こんにちは identity, 2026
+  pass-through, plus 5/5 scoping-predicate cases. Bundle 55,845 →
+  69,808 B raw / 21.11 → 26.62 kB gzip (+5.51 kB gz, single-digit).
+• For P1.5.3 (discovered while probing): one-shot toKana under our
+  options does NOT match two of this plan's illustrative examples —
+  shimbun → しmぶn and nen → ねn (trailing/mid n rules differ from a
+  real IME); pin fixtures from ACTUAL runs, and check whether
+  incremental bind() keystroke input (splitInput + cursor) differs
+  from one-shot before hardcoding ん expectations.
+• Not done here: fixture + scoping tests (P1.5.3); manual browser
+  walkthrough incl. zero-network + leak checks (P1.5.4).
 ```
 
 ---
 
 ## P1.5.3 Tests — `tests/kana-input.test.ts`
 
-- [ ] **Behavior fixture table** (hardcoded literals only, the
+- [x] **Behavior fixture table** (hardcoded literals only, the
       `tests/normalize.test.ts` precedent): input → expected kana,
       asserted through `toKana(input, KANA_INPUT_OPTIONS)` — the pure
       entry point `bind()` uses internally, so the table needs no DOM.
@@ -181,14 +254,14 @@ listeners across prompts; `npm run check` green.
       through (`café`, `2026`). Purpose: pins the dependency so an
       upgrade can never silently change what grades — the same role
       D11's parity table plays for normalization.
-- [ ] **Scoping predicate tests** built on the REAL prompt factories
+- [x] **Scoping predicate tests** built on the REAL prompt factories
       from `src/worker/prompts.ts`: `vocabReadingPrompt` → true,
       `kanjiReadingPrompt` → true, `vocabMeaningPrompt` → false
       (`keyword`), `vocabProductionPrompt` → false (`production`).
       Plus a guard that no other current rule value matches
       `isKanaAnswerPrompt` (so a future rule is a deliberate decision,
       not an accident).
-- [ ] **Environment caveat:** tests run inside workerd
+- [x] **Environment caveat:** tests run inside workerd
       (`@cloudflare/vitest-plugin`); wanakana's pure conversion path
       should import cleanly, but if the module references `window` at
       scope level, split the fixture onto a client-compatible vitest
@@ -200,15 +273,54 @@ listeners across prompts; `npm run check` green.
 **Notes:**
 
 ```
-
-
+(executed 2026-11-20 — tests only; no product code touched.)
+• tests/kana-input.test.ts: 39 tests, written in the
+  tests/normalize.test.ts fixture style (hardcoded literals, looped
+  it() cases) — 32 toKana(input, KANA_INPUT_OPTIONS) behavior rows,
+  1 options pin ({ IMEMode: "toHiragana" } exactly — D-3), and 6
+  scoping tests.
+• Methodology: every expected value captured from ONE real run of
+  wanakana@5.3.1 at authoring time, then hardcoded verbatim. Where
+  this plan's illustrative examples did not match reality, the REAL
+  output is pinned with an explanatory comment:
+  - `shimbun` → しmぶn (NOT しんぶん — wanakana does no
+    m-assimilation; type `shinbun`), `nen` → ねn, `nihon` → にほn:
+    a trailing n stays PENDING under IMEMode because bind() forces
+    `options.IMEMode || true` — no options avoid it (verified in
+    esm/index.js: applyMapping gets convertEnding=false whenever
+    IMEMode is truthy).
+  - Spacebar COMMITS the pending ん and is consumed in the process
+    (user-reported in the browser; verified identically through a
+    keystroke simulation of the real bind() listener chain AND
+    one-shot: "nihon " → にほん, "nen " → ねん). With nothing
+    pending the space remains ("maiasa " → まいあさ␣) — harmless,
+    the server's normalizeExact strips every whitespace kind (D11
+    parity table). Both semantics are pinned as fixture rows;
+    real-browser confirmation belongs to the P1.5.4 walkthrough.
+  - `café` → かfé (NOT pass-through as the plan assumed) — harmless
+    because bound fields only take kana answers; pinned anyway.
+• Scoping tests use the REAL factories with prompts.test.ts's seed
+  rows (毎朝 / 一): vocab reading → true, kanji reading → true,
+  meaning → false, production → false; plus an exhaustive
+  Record<GradingSpec["rule"], boolean> so a future rule fails tsc
+  until classified ("a deliberate decision, not an accident"), plus
+  a no-grading-spec case (API.md passage-prompt shape → never bound).
+• Environment caveat RESOLVED POSITIVELY: tests run inside workerd
+  and wanakana's pure path imports cleanly — module scope touches no
+  DOM globals (window only inside the composition handler, never
+  called here). No client-env split needed.
+• npm run check green: 13 files / 280 tests (was 12/241; +39).
+• TASKS.md: bullets 1 (dependency + fixture) and 5 (tests) ticked
+  with this sub-task; every Phase 1.5 TASKS bullet is now done —
+  only P1.5.4's walkthrough remains, which TASKS carries inside the
+  phase acceptance line rather than as a bullet.
 ```
 
 ---
 
 ## P1.5.4 Acceptance walkthrough — manual browser pass
 
-- [ ] On a device/browser **without** a Japanese IME (desktop is
+- [x] On a device/browser **without** a Japanese IME (desktop is
       fine — the whole point), from a running `npm run dev`:
       1. reading prompt: type `maiasa` → field shows `まいあさ`; the
          POST body contains `まいあさ` (Network panel) and the server
@@ -224,12 +336,12 @@ listeners across prompts; `npm run check` green.
       6. advance through ≥20 mixed prompts — `data-wanakana-id`
          present only on kana-answer prompts, no listener leak, no
          console errors.
-- [ ] Zero-network check: DevTools Network shows no requests during
+- [x] Zero-network check: DevTools Network shows no requests during
       typing; conversion also works with the tab set to offline
       (offline-safe, LEARNING-DESIGN §9).
-- [ ] Bundle check: `npm run build`, confirm single-digit kB growth
+- [x] Bundle check: `npm run build`, confirm single-digit kB growth
       in `dist/assets`.
-- [ ] Fill Notes with results + commits; tick the matching TASKS.md
+- [x] Fill Notes with results + commits; tick the matching TASKS.md
       bullets.
 
 **Acceptance:** all checklist items pass on desktop; the two

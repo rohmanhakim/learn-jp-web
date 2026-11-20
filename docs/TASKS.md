@@ -78,20 +78,20 @@ on a device without a Japanese IME. Transliteration only — no
 candidate list, no dictionary, no toggle (D14); grading, API, and
 schema untouched. Working plan: [Phase-001.5.md](Phase-001.5.md).
 
-- [ ] Dependency: `wanakana` 5.3.1 (MIT, ~6.6 kB min+gz) in
+- [x] Dependency: `wanakana` 5.3.1 (MIT, ~6.6 kB min+gz) in
       `package.json`, plus a fixture table pinning its behavior under
       our options (upgrade safety — same role as D11's parity table)
-- [ ] Conversion layer (`src/client/kana-input.ts` + `Session.svelte`)
+- [x] Conversion layer (`src/client/kana-input.ts` + `Session.svelte`)
       scoped by `grading.rule === "normalized_exact"` only — meaning
       (`keyword`) and production fields are never bound
-- [ ] State parity: the submitted `answer` always equals the
+- [x] State parity: the submitted `answer` always equals the
       displayed field value (`bind()` rewrites the DOM inside an
       input event — see Phase-001.5.md P1.5.2)
-- [ ] Composition safety: our own `compositionstart/end` guard so a
+- [x] Composition safety: our own `compositionstart/end` guard so a
       platform IME is never mutated mid-composition (the library's
       own handling is macOS-only); existing ⏎ `isComposing` guard
       unchanged
-- [ ] Tests: romaji→kana fixture table + scoping-predicate tests over
+- [x] Tests: romaji→kana fixture table + scoping-predicate tests over
       the real prompt factories; `npm run check` green
 - [x] Docs sync: UX.md input considerations, LEARNING-DESIGN §2
       clarifying sentence, DECISIONS D14 (done in the planning

@@ -40,6 +40,7 @@
   import { itemKeyFromPromptKey, type SelfGrade } from "../worker/keys";
   import { normalizeExact } from "../worker/normalize";
   import { completeSession, sendResponses } from "./api";
+  import { bindKanaInput, isKanaAnswerPrompt, unbindKanaInput } from "./kana-input";
 
   let {
     session,
@@ -124,6 +125,41 @@
   // Focus the field whenever a fresh prompt is up (keyboard-first UX).
   $effect(() => {
     if (phase === "answering") fieldEl?.focus();
+  });
+
+  // P1.5.2 — bind the romaji→kana converter to kana-answer inputs ONLY
+  // (grading.rule === "normalized_exact", D-2): the production textarea
+  // and meaning inputs are never bound. Hard state-parity invariant:
+  // after every input event `answer === element.value`, so the submitted
+  // answer always equals the displayed field. Why the sync listener is
+  // needed: same-event listeners run in attachment order — Svelte's
+  // bind:value listener (attached at element creation) runs FIRST and
+  // captures pre-conversion romaji; the library rewrites element.value
+  // inside its own listener (attached by bindKanaInput); this listener,
+  // attached AFTER bindKanaInput, therefore reads the converted kana
+  // back into `answer`. Svelte's own post-tick re-write restores the
+  // selection and its render-effect write is equality-guarded (checked
+  // against svelte's bind_value source), so the converted value is
+  // never clobbered. compositionend sync (attached after the guard's
+  // handler in kana-input.ts) refreshes `answer` for IME commits that
+  // fire no trailing input event. Cleanup unbinds on prompt advance or
+  // rule change; re-renders while already bound are no-ops (the
+  // library's bind() is idempotent via data-wanakana-id).
+  $effect(() => {
+    const element = fieldEl;
+    if (!(element instanceof HTMLInputElement)) return;
+    if (!prompt || !isKanaAnswerPrompt(prompt)) return;
+    bindKanaInput(element);
+    const sync = (): void => {
+      answer = element.value;
+    };
+    element.addEventListener("input", sync);
+    element.addEventListener("compositionend", sync);
+    return () => {
+      element.removeEventListener("input", sync);
+      element.removeEventListener("compositionend", sync);
+      unbindKanaInput(element);
+    };
   });
 
   // Desktop shortcuts 1/2/3 while the self-grade row is up. The field
