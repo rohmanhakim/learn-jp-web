@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="learn-jp-web">
+  <!-- Placeholder source icon (docs/Phase-002.md P2.1): a minimal
+       glyph-on-solid-background mark; refine during Phase 6 polish.
+       Every manifest/apple/favicon PNG is derived from this file at
+       build time (pwa-assets.config.ts). -->
+  <rect width="512" height="512" fill="#4f46e5" />
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#ffffff" stroke-width="34" />
+  <path d="M188 264 L240 316 L338 198" fill="none" stroke="#ffffff" stroke-width="46" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

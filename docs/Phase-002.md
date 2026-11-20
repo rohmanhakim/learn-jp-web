@@ -68,7 +68,7 @@ built as soon as P2.2 exists (it only reads the snapshot slot).
 
 ### P2.1 Service worker + web app manifest — `vite.config.ts`, `public/`
 
-- [ ] Dependency: `vite-plugin-pwa` **pinned to an exact version** in
+- [x] Dependency: `vite-plugin-pwa` **pinned to an exact version** in
       `devDependencies` (D-1; same pinning logic as `wanakana` in
       P1.5.1 — see Appendix for the survey and the upstream-churn
       flag), config added to `vite.config.ts` **after** verifying
@@ -76,28 +76,121 @@ built as soon as P2.2 exists (it only reads the snapshot slot).
       `dist/client`, so the precache glob directory must point at the
       built client — verify `sw.js` and `manifest.webmanifest` land at
       URLs Workers Static Assets actually serve, at root scope
-- [ ] `generateSW` strategy: precache the app shell (HTML + JS/CSS
+- [x] `generateSW` strategy: precache the app shell (HTML + JS/CSS
       chunks — including the `wanakana` chunk from Phase 1.5),
       `navigateFallback` → precached `index.html`,
       `cleanupOutdatedCaches: true`; registration via
       `virtual:pwa-register` from `src/client/main.ts` with
       `registerType: "autoUpdate"` (D-1) — no update-prompt UI (UX.md:
       no chrome the user must interpret)
-- [ ] Web app manifest (Lighthouse "installable"): `name` /
+- [x] Web app manifest (Lighthouse "installable"): `name` /
       `short_name`, `display: standalone`, `start_url: "/"`, theme +
       color-scheme matching `index.html`'s `light dark`. The repo has
       **no icon and no `public/` today** — commit a minimal source
       icon and derive the 192/512 (+maskable) manifest icons from it
-- [ ] Offline boot proof: after one online load, a hard reload with
+- [x] Offline boot proof: after one online load, a hard reload with
       the network disabled renders the Home screen (data states are
       P2.4's job — an empty/last-known Home is acceptable here)
-- [ ] Guard test in the spirit of D11's parity table / P1.5.1's pin:
+- [x] Guard test in the spirit of D11's parity table / P1.5.1's pin:
       assert the precache manifest covers every client file `vite
       build` emits; if asserting build output inside workerd tests is
       impractical, document the manual check in Notes and fold it into
       P2.8's walkthrough
 
 **Notes:**
+
+```
+(executed 2026-11-20 — dependency + config + guard + browser walkthrough;
+all five bullets verified, `npm run check` green at 280 tests, no commits)
+
+• Versions: vite-plugin-pwa 2.0.0 + @vite-pwa/assets-generator 2.0.0, both
+  EXACT in devDependencies (npm defaults to carets; --save-exact used).
+  Appendix's install-time re-verify done: 2.0.0 (2026-10-03) is latest; its
+  only breaking change vs 1.x is the assets-generator peer bump to ^2.0.0 —
+  still Workbox 7.4.1 / generateSW / vite peer ^8.0.0 / node >=20.19. The
+  "legacy line already frozen" contingency did NOT materialize; if a future
+  major moves to the announced next-gen packages, the pin + guard force a
+  deliberate upgrade.
+
+• Cloudflare interplay (the plan's verify-first item — three findings):
+  1. Top-level resolved `build.outDir` stays `dist` while the Cloudflare
+     plugin derives the client env dir as `dist/<env>` (dist/client).
+     vite-plugin-pwa reads only the top-level value (options.outDir
+     defaults to viteConfig.build.outDir), so it MUST get
+     `outDir: "dist/client"` explicitly — otherwise sw.js + manifest land
+     in dist/ (never served) and the glob would swallow dist/worker/*.js.
+  2. vite-plugin-pwa has ZERO Vite-environment awareness at 2.0.0: during
+     the worker build its generateBundle/injectRegister also ran, dropping
+     registerSW.js + manifest.webmanifest into dist/worker (injectRegister
+     "auto" fell back to script mode there — the worker bundle never
+     imports virtual:pwa-register). Fixed by setting
+     applyToEnvironment = env.name === "client" on every plugin VitePWA()
+     returns; config/configResolved still run top-level, Vite only skips
+     environment-scoped hooks (checked vite's resolveEnvironmentPlugins).
+     Verified: worker output back to wrangler.json + index.js only.
+  3. Serving verified against the built wrangler.json (assets.directory =
+     ../client): /sw.js → 200 text/javascript, /manifest.webmanifest →
+     200 application/manifest+json (correct MIME — Lighthouse cares), both
+     at root scope; index.html carries the manifest link, theme-color and
+     icon links.
+
+• Duplicate precache entry (caught before the guard existed): the plugin
+  unconditionally pushes manifest.webmanifest into
+  workbox.additionalManifestEntries, so globbing it too yielded two
+  identical entries (13 total). Removed `webmanifest` from globPatterns →
+  12 unique entries. globIgnores: ["sw.js"] is belt-and-braces
+  (emptyOutDir wipes dist/client before the glob anyway); workbox-*.js is
+  excluded by workbox itself (imported by sw.js).
+
+• Icons: EXTERNAL pwa-assets.config.ts chosen over the inline
+  `preset: "minimal-2023"` (the docs recommend it, and it lets the
+  maskable/apple backgrounds be #4f46e5 instead of the default white — the
+  source is full-bleed, so white padding would have framed it). Source:
+  public/favicon.svg, placeholder glyph-on-solid (the plan's open question
+  resolved as "placeholder ships first", refine in Phase 6). Generated and
+  size-verified: pwa-64/192/512.png, maskable-icon-512x512.png,
+  apple-touch-icon-180x180.png, favicon.ico 48x48. Manifest icons are
+  listed explicitly with the generator's own filenames (they match the
+  emitted files; omitting them would also work — pwaAssets injects).
+
+• Manifest values: theme_color #4f46e5 (also injected as meta theme-color),
+  background_color #ffffff (app background is system `Canvas` with
+  `light dark`; the manifest splash is necessarily static).
+
+• Guard: workerd tests have no filesystem access to dist/ (same caveat
+  P1.5.3 recorded), so instead of a Vitest test the check is
+  scripts/check-precache.ts — Node, no new deps. It parses the precache
+  list out of sw.js and asserts (a) every shipped client file is covered,
+  exempting only sw.js / workbox-*.js / wrangler.json / .assetsignore,
+  (b) no duplicate entries, (c) no stale entries — and fails loudly if
+  Workbox's output format changes (the pin-guard role of D-1). Wired as
+  `build: vite build && npm run check:precache`, so CI's build step and
+  `npm run deploy` cannot ship a precache gap — stronger than the plan's
+  documented-manual-check fallback. Current: "12 entries cover all 15
+  shipped client files".
+
+• Dev mode: SW stays off (devOptions disabled) — /sw.js 404s,
+  registerSW() is a no-op, the pwaAssets middleware serves the icons and
+  injects theme-color/icon links. /manifest.webmanifest 404s in dev
+  because the plugin gates that middleware on devOptions.enabled —
+  upstream default, not a misconfiguration (installability is tested on
+  the built app, P2.8).
+
+• Verified: build run twice consecutively (second run re-globs a dir that
+  contains the previous sw.js — clean), guard green, `npm run check` green
+  (lint, wrangler types --check, tsc, 280/280), `npm run dev` boots with
+  no warnings, dev icon routes all 200.
+
+• Browser walkthrough (user-run, 2026-11-20): load online → DevTools
+  offline → reload → Home renders from precache ✓. PLAN CORRECTION: the
+  bullet's "hard reload" must mean a PLAIN reload — Shift+Reload bypasses
+  the service worker by browser design and would fail this proof; run it
+  as F5/⌘R. Tapping start while offline then shows Phase 1's "Couldn't
+  prepare your session" — EXPECTED at P2.1: the offline snapshot slot
+  (D-6 prefetch → pending_session) is P2.2, and its offline UX (queued /
+  offline states instead of the generic error) is P2.4/P2.5. Not a
+  regression; P2.8's airplane-mode walkthrough covers the full loop.
+```
 
 ### P2.2 IndexedDB layer — `src/client/storage.ts`
 
