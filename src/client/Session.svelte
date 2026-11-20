@@ -20,7 +20,15 @@
   //       ~1.2 s window (timer starts at submit), so slow/failed calls
   //       cannot block the next prompt; failures are logged, Phase 2's
   //       queue owns retry/offline (UX.md "no network block…").
-  // Fast-skip is P1.15; passage/choice prompts are Phase 3 — v1 serves
+  //   (d) P1.15 fast-skip — when the snapshot carries
+  //       `fast_skip_available`, every recall prompt offers "I know
+  //       this": one tap sends a kind_hint=fast_skip response (no
+  //       answer, no self_grade, NO verdict window — advance is
+  //       synchronous) behind a 300 ms double-tap guard, because
+  //       advance() swaps in the next prompt's enabled button within
+  //       the same tick. The send joins `inflight` so finish() still
+  //       awaits the row before /session/complete.
+  // passage/choice prompts are Phase 3 — v1 serves
   // `text` and `text+selfgrade` only.
   import { onDestroy } from "svelte";
   import type {
@@ -67,9 +75,15 @@
   let advanceTimer: ReturnType<typeof setTimeout> | null = null;
   let inflight: Promise<unknown> | null = null;
 
+  let lastSkipAt = 0;
+
   const prompt = $derived(session.prompts[index]);
   const isProduction = $derived(prompt?.input === "text+selfgrade");
   const blank = $derived(answer.trim() === "");
+  /** P1.15 — "I know this": first run only, recall prompts only, answering phase. */
+  const canSkip = $derived(
+    session.fast_skip_available && !isProduction && prompt !== undefined && phase === "answering",
+  );
   const progress = $derived(total === 0 ? 0 : (index / total) * 100);
   const chip = $derived(
     prompt
@@ -183,6 +197,46 @@
       self_grade: selfGrade,
       latency_ms: answerLatencyMs,
     });
+  }
+
+  /** P1.15 — "I know this": record the skip, advance immediately. */
+  function fastSkip(): void {
+    if (finishing || !canSkip || !prompt) return;
+    // advance() swaps in the next prompt's enabled button synchronously,
+    // so a second click in the same burst would skip twice (decision d).
+    if (Date.now() - lastSkipAt < 300) return;
+    lastSkipAt = Date.now();
+
+    const itemKey = itemKeyFromPromptKey(prompt.prompt_key);
+    if (itemKey === null) {
+      // Capture keys (D-5) have no SRS identity and are never served
+      // in v1 — defensive: keep the flow moving, send nothing.
+      advance();
+      return;
+    }
+
+    const send = sendResponses({
+      session_uuid: session.session_uuid,
+      responses: [
+        {
+          response_uuid: crypto.randomUUID(),
+          prompt_key: prompt.prompt_key,
+          item_key: itemKey,
+          bucket: prompt.bucket,
+          kind_hint: "fast_skip",
+          latency_ms: Date.now() - shownAt,
+        },
+      ],
+    }).catch((error: unknown) => {
+      // Phase 1 is online-only (local dev); Phase 2's queue owns retry.
+      console.error("fast-skip not recorded:", error);
+    });
+    inflight = send;
+    void send.finally(() => {
+      inflight = null;
+    });
+
+    advance(); // no verdict window — the skip IS the advance (decision d)
   }
 
   /**
@@ -329,6 +383,10 @@
         >⏎</button>
       {/if}
     </div>
+
+    {#if canSkip}
+      <button type="button" class="skip" onclick={fastSkip}>I know this</button>
+    {/if}
 
     {#if phase === "checks"}
       {#each previewChecks as check}
@@ -509,6 +567,30 @@
   .submit:focus-visible {
     outline: 2px solid Highlight;
     outline-offset: 1px;
+  }
+
+  /* P1.15 — deliberately secondary to the answer field (UX.md §2). */
+  .skip {
+    margin: 0.2rem 0 0;
+    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+    border-radius: 0.75rem;
+    background: none;
+    font: inherit;
+    font-size: 0.95rem;
+    color: color-mix(in srgb, CanvasText 55%, transparent);
+    cursor: pointer;
+    min-height: 3rem;
+    padding: 0.5rem 1.1rem;
+  }
+
+  .skip:hover {
+    background: color-mix(in srgb, CanvasText 6%, transparent);
+    color: color-mix(in srgb, CanvasText 75%, transparent);
+  }
+
+  .skip:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
   }
 
   .check {

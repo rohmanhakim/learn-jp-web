@@ -931,7 +931,7 @@ commits: 920584e )
 
 ### P1.15 First-run fast-skip UI ("I know this")
 
-- [ ] "I know this" action on every recall prompt when the snapshot
+- [x] "I know this" action on every recall prompt when the snapshot
       has `fast_skip_available`; one tap → response with
       `kind_hint: "fast_skip"` → next prompt (no grading UI, no
       self-grade).
@@ -945,7 +945,52 @@ excluded from reviews before then (`suspended = 1`).
 **Notes:**
 
 ```
-(started: · decided: · commits: )
+(started: 2026-11-20 · decided:
+(1) UI gate — one derived `canSkip` in Session.svelte: snapshot's
+    `fast_skip_available` && recall prompt (!isProduction) && phase
+    answering. The server deliberately does NOT re-check the flag
+    (responses.ts comment): by the time answers arrive the session row
+    exists, so the gate is the UI's alone.
+(2) send path — a dedicated `fastSkip()` beside gradeAndAdvance, NOT a
+    reuse: no verdict phase, no 1.2 s window — `advance()` runs
+    synchronously (the tap IS the advance, UX.md "no network block").
+    The send joins `inflight`, so last-prompt and ✕-exit still await
+    the skip row before /session/complete computes counts. Failures are
+    console-logged only (Phase 2's queue owns retry/offline).
+(3) double-tap guard — 300 ms window via a `lastSkipAt` stamp:
+    advance() swaps in the NEXT prompt's enabled button synchronously,
+    so a second click in the same burst would otherwise skip twice.
+(4) placement — muted ghost button (`.skip`) under the answer field,
+    never on production prompts, no keyboard shortcut (one-tap, §9).
+    UX.md had no fast-skip mockup — §2 gained a short "First-run
+    fast-skip" paragraph documenting the button in the same change.
+(5) verification — `npm run check` green (lint + wrangler types
+    --check + tsc + 241 tests) and `vite build` clean. Live API smoke
+    against `npm run dev` on a RESET local D1 (rm .wrangler/state/v3/d1
+    → db:apply → seed 8,334/2,091): start #1 → fast_skip_available
+    true, 3 prompts → fast-skip request (the exact Session.svelte
+    payload) → 200 with `{duplicate, srs}` only (NO grade /
+    correct_answer / checks), due_at = now + 30.00d → complete →
+    summary new {done: 1, correct: 0} (counted, never correct) →
+    start #2 → flag false AND the skipped item (r:jlpt:n5:大人:meaning)
+    absent from prompts → status due_count 0 (suspended excluded) and
+    weakest_bucket still null (kind_hint excluded from §3 accuracy) →
+    D1 rows: responses kind_hint='fast_skip' with answer/grade/
+    self_grade NULL; srs_state suspended=1, due_at exactly +30d →
+    reappearance: unsuspend + backdate → the item returns as a REVIEW
+    (is_new false). DB reset to first-run (sessions/responses/srs_state
+    = 0) after the smoke so the browser pass starts fresh.
+NOT yet done: the human browser pass — eyeball that the button renders
+on every recall prompt of session 1, one tap advances with no grading
+UI, and it is gone from session 2 (checkbox stays [~] and TASKS.md's
+Fast-skip bullet stays unticked until that pass — P1.13/P1.14
+precedent).
+(6) walkthrough PASSED 2026-11-20 (user, desktop browser) — localhost:
+    "I know this" appears on session 1's recall prompts, tapping it
+    through to the end of the session works, and session 2's start
+    serves no button (flag false). Checkbox → [x]; TASKS.md's
+    First-run fast-skip bullet ticked alongside.
+commits: )
 ```
 
 ---

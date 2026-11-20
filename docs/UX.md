@@ -66,6 +66,14 @@ never a ceremony).
 ```
 After submit (online): inline verdict for ~1.2 s, then next prompt.
 
+**First-run fast-skip (session 1 only):** while the snapshot carries
+`fast_skip_available`, every recall prompt also shows a muted **I know
+this** button under the field (never on production prompts). One tap
+records the skip server-side — no grading UI, no self-grade, no
+verdict — and jumps straight to the next prompt; the skipped item is
+suspended and returns only 30 days later. From session 2 onward the
+button is gone (LEARNING-DESIGN §7).
+
 **Reading prompt (production, with self-grade):**
 ```
         new · writing

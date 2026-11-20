@@ -63,7 +63,7 @@ Recall prompts only — the loop itself must exist before content depth.
       compile-time checked on both ends
 - [x] Frontend: Home / Session / Done per UX.md (recall + production
       with self-grade)
-- [ ] First-run fast-skip ("I know this") flow
+- [x] First-run fast-skip ("I know this") flow
 - [ ] Sessions + responses persisted; streak computed from `sessions`
 - [x] Done screen shows `next_session.preview` derived from real data
 
